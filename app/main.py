@@ -10,7 +10,7 @@ from starlette import status
 import os
 from slowapi.middleware import SlowAPIMiddleware
 
-from api.model import init_models
+from utils.model import init_models
 from utils.summarizer import init_model
 from DB.deps import db_dependency
 from auth.routes import router as auth_router
@@ -20,7 +20,7 @@ from utils.rate_limiter import limiter
 from api.routes.file_upload import router as up_router
 from api.routes.study_tools import router as study_router
 from utils.redis_handler import redis_client
-from api.model1 import init_model1
+from utils.model1 import init_model1
 from api.routes.plan import router as plan_router
 from api.routes.payment import router as payment_router
 from api.routes.test import router as test_router

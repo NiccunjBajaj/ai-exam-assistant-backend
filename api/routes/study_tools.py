@@ -14,7 +14,7 @@ from DB.db_models import Notes, FlashCards, StudySessions, QuizQuestion, Message
 from DB.deps import db_dependency
 from auth.deps import get_current_user
 from auth.limits import enforce_flashcards_limit, enforce_notes_limit
-from api.model1 import flashcard, note, quiz
+from utils.model1 import flashcard, note, quiz
 from utils.usage_tracker import track_notes_usage, track_flashcards_usage
 
 load_dotenv()

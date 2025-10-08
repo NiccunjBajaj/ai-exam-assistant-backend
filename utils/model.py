@@ -12,7 +12,7 @@ from memory.short_term import _get_stm, _save_to_stm
 from memory.long_term import retrive_similar_memories,check_and_update_ltm
 from memory.chat_history import save_user_and_bot_messages
 from DB.db_models import Session,FlashCards,StudySessions,Notes
-from .routes.study_tools import flashcard,note
+from api.routes.study_tools import flashcard,note
 
 
 MAX_RETRIES = 3

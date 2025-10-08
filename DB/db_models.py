@@ -7,7 +7,7 @@ from sqlalchemy.sql import func
 import uuid
 from pgvector.sqlalchemy import Vector
 
-from databas import Base
+from app.databas import Base
 
 class User(Base):
     __tablename__ = "users"

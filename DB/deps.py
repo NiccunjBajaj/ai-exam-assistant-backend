@@ -1,4 +1,4 @@
-from databas import SessionLocal
+from app.databas import SessionLocal
 from sqlalchemy.orm import Session
 from fastapi import Depends, HTTPException
 from typing import Annotated

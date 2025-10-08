@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 from DB.deps import get_db, db_dependency
 from DB.db_models import Session, Message
 from auth.deps import get_current_user
-from api.model import generate_response
+from utils.model import generate_response
 from auth.limits import enforce_message_limit
 from utils.usage_tracker import track_message_usage
 
