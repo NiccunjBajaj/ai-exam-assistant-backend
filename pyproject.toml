@@ -5,27 +5,28 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
+    "alembic",
     "fastapi",
-    "uvicorn",
-    "SQLAlchemy",
-    "psycopg2-binary",
+    "fastapi-limiter",
     "pydantic",
     "python-dotenv",
-    "pydantic_core",
+    "passlib",
     "requests",
-    "httpx",
     "redis",
+    "slowapi",
+    "pgvector",
+    "sentence-transformers",
+    "pdfplumber",
+    "pytesseract",
+    "pillow",
+    "numpy",
     "razorpay",
     "python-jose",
-    "passlib",
-    "alembic",
-    "starlette",
-    "python-multipart",
-    "typing-extensions",
-    "email_validator",
-    "jinja2",
-    "orjson",
     "openai",
-    "uvloop",  # optional, speeds up async FastAPI
+    "google-generativeai",
+    "SQLAlchemy",
+    "starlette",
+    "uvicorn"
 ]
+
 
