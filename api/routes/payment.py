@@ -2,8 +2,10 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 from datetime import datetime, timezone, timedelta
 from pydantic import BaseModel
+from fastapi.concurrency import run_in_threadpool
 import razorpay
 import os
+import time
 from dotenv import load_dotenv
 
 from DB.deps import db_dependency, get_db
@@ -38,9 +40,10 @@ async def create_order(
     db: Session = Depends(get_db)
 ):
     """Create a Razorpay order for plan upgrade"""
-    
+
     # Validate plan
     plan = db.query(Plan).filter(Plan.id == request.plan_id, Plan.is_active == True).first()
+    print("Plan fetched:", plan)
     if not plan:
         raise HTTPException(status_code=404, detail="Plan not found")
     
@@ -49,27 +52,25 @@ async def create_order(
         return await upgrade_plan_direct(user, plan, request.subscription_type, db)
     
     # Calculate amount based on subscription type
-    if request.subscription_type == "yearly":
-        amount = int(plan.price * 12 * 100)  # Convert to paise and apply yearly discount
-        currency = "INR"
-    else:  # monthly
-        amount = int(plan.price * 100)  # Convert to paise
-        currency = "INR"
+    amount = int(plan.price * 100)
+    currency = "INR"
     
     # Create Razorpay order
     order_data = {
         "amount": amount,
         "currency": currency,
-        "receipt": f"plan_{request.plan_id}_{user.id}",
+        "receipt": f"plan_{request.plan_id}_{int(time.time())}",  # max ~13 chars
         "notes": {
             "user_id": str(user.id),
             "plan_id": str(request.plan_id),
-            "subscription_type": request.subscription_type
+            "subscription_type": str(request.subscription_type)
         }
     }
     
     try:
-        order = client.order.create(data=order_data)
+        order = await run_in_threadpool(lambda: client.order.create(data=order_data))
+        print("Created order:", order)
+        print("Order notes:", order.get("notes"))
         return {
             "order_id": order["id"],
             "amount": order["amount"],
@@ -89,15 +90,20 @@ async def verify_payment(
     
     try:
         # Verify payment signature
-        client.utility.verify_payment_signature({
+        await run_in_threadpool(lambda: client.utility.verify_payment_signature({
             "razorpay_order_id": request.razorpay_order_id,
             "razorpay_payment_id": request.razorpay_payment_id,
             "razorpay_signature": request.razorpay_signature
-        })
+        }))
+
         
         # Get order details from Razorpay
-        order = client.order.fetch(request.razorpay_order_id)
+        order = await run_in_threadpool(lambda: client.order.fetch(request.razorpay_order_id))
         
+        print("Fetched order:", order)
+        print("Order notes:", order.get("notes"))
+
+
         # Extract plan info from order notes
         plan_id = int(order["notes"]["plan_id"])
         subscription_type = order["notes"]["subscription_type"]
@@ -115,7 +121,19 @@ async def verify_payment(
         if subscription:
             subscription.razorpay_order_id = request.razorpay_order_id
             subscription.razorpay_payment_id = request.razorpay_payment_id
-            db.commit()
+        else:
+            from DB.db_models import UserSubscription
+            subscription = UserSubscription(
+                user_id=user.id,
+                plan_id=plan.id,
+                razorpay_order_id=request.razorpay_order_id,
+                razorpay_payment_id=request.razorpay_payment_id,
+                start_date=datetime.now(timezone.utc),
+                is_active=True,
+                subscription_type=subscription_type
+            )
+            db.add(subscription)
+        db.commit()
         
         return {
             "message": "Payment verified and plan upgraded successfully!",
