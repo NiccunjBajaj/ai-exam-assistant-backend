@@ -2,11 +2,6 @@ from fastapi import APIRouter, HTTPException, Depends, Request
 from fastapi.responses import RedirectResponse
 from urllib.parse import urlencode
 from starlette import status
-from DB.deps import db_dependency
-from DB.db_models import User, Plan, UserSubscription
-from auth.deps import get_current_user
-from auth.schema import UserCreate, UserLogin, UserResponse, Token, GoogleLoginRequest
-from auth.utils import hash_pass, verify_pass, create_access_token
 from datetime import timedelta
 from google.oauth2 import id_token
 from google.auth.transport import requests
@@ -15,6 +10,12 @@ import os
 import requests as req
 import uuid
 from datetime import datetime, timezone
+
+from DB.deps import db_dependency
+from DB.db_models import User, Plan, UserSubscription
+from auth.deps import get_current_user
+from auth.schema import UserCreate, UserLogin, UserResponse, Token, GoogleLoginRequest
+from auth.utils import hash_pass, verify_pass, create_access_token
 
 load_dotenv()
 

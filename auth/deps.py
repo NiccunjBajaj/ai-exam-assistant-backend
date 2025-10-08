@@ -2,10 +2,11 @@ from fastapi import Depends, HTTPException
 from starlette import status
 from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError, jwt
+from typing import Annotated
+
 from DB.deps import db_dependency
 from DB.db_models import User, Plan
 from auth.utils import SECRET_KEY, ALGORITHM
-from typing import Annotated
 from .utils import decode_access_token
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")

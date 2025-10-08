@@ -5,7 +5,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from db_models import Plan
 from sqlalchemy.orm import Session
 
-from databas import Base,engine
+from app.databas import Base,engine
 
 def seed_plans():
     Base.metadata.create_all(bind=engine)  # ensure tables exist

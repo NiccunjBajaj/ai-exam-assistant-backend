@@ -1,7 +1,8 @@
-from DB.db_models import Message
-from DB.deps import db_dependency
 from datetime import datetime, timezone
 import uuid
+
+from DB.db_models import Message
+from DB.deps import db_dependency
 
 def save_user_and_bot_messages(db:db_dependency, user_id: str, session_id: str, user_msg: str, bot_response: str):
     now = datetime.now(timezone.utc)

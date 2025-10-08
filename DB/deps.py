@@ -1,7 +1,8 @@
-from app.databas import SessionLocal
 from sqlalchemy.orm import Session
 from fastapi import Depends, HTTPException
 from typing import Annotated
+
+from app.databas import SessionLocal
 
 def get_db():
     db = SessionLocal()

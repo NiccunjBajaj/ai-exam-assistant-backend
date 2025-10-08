@@ -1,8 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException, Request, Body
 from datetime import datetime, timezone
 from uuid import UUID
-
 from sqlalchemy.orm import Session
+
 from DB.deps import get_db, db_dependency
 from DB.db_models import Session, Message
 from auth.deps import get_current_user

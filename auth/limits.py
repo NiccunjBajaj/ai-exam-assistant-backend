@@ -1,9 +1,10 @@
 from fastapi import Depends, HTTPException
 from sqlalchemy import text
 from sqlalchemy.orm import Session
+from datetime import datetime, timedelta, timezone
+
 from DB.deps import db_dependency, get_db
 from auth.deps import get_current_plan, user_dependency, get_current_user
-from datetime import datetime, timedelta, timezone
 from DB.db_models import Message, Session
 
 

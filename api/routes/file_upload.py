@@ -1,8 +1,8 @@
 from fastapi import APIRouter, Query, UploadFile, File, Form, HTTPException
 from typing import Literal
-from utils.redis_handler import redis_client as redis
 import json
 
+from utils.redis_handler import redis_client as redis
 from utils.pdf_parser import extract_text_from_pdf
 from utils.image_parser import extract_text_from_image
 
