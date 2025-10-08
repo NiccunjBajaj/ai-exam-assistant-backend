@@ -82,7 +82,7 @@ dependencies = [
     "langsmith",
     "limits",
     "looseversion",
-    "lxml",
+    "lxml==5.4.0",
     "Mako",
     "markdown-it-py",
     "MarkupSafe",
