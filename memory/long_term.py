@@ -42,7 +42,7 @@ def check_and_update_ltm(user_id: str, session_id: str, db: db_dependency):
     )
 
     # Only trigger summary every N messages (e.g., every 5th message)
-    if len(messages) % SUMMARY_TRIGGER_LIMIT == 0:
+    if len(messages) % SUMMARY_TRIGGER_LIMIT != 0:
         return
 
     recent_messages = messages[-50:]  # safely get up to last 50

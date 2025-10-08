@@ -45,8 +45,6 @@ client = OpenAI(
     api_key=OPENAI_API_KEY,
 )
 
-print("Starting FastAPI on port", os.getenv("PORT", "8000"))
-
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
