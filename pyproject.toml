@@ -3,7 +3,7 @@ name = "fastapi"
 version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
-requires-python = "==3.13.1"
+requires-python = ">=3.13.1"
 dependencies = [
     "setuptools==78.1.0",
     "accelerate==1.6.0",
@@ -38,7 +38,7 @@ dependencies = [
     "etelemetry==0.3.1",
     "eval_type_backport==0.2.2",
     "faiss-cpu==1.10.0",
-    "fastapi==0.115.12",
+    "fastapi>=0.117.1",
     "fastapi-cli==0.0.7",
     "fastapi-limiter==0.1.6",
     "ffmpeg-python==0.2.0",
