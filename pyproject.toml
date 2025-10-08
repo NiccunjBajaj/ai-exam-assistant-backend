@@ -11,6 +11,7 @@ dependencies = [
     "psycopg2-binary",
     "pydantic",
     "python-dotenv",
+    "pydantic_core",
     "requests",
     "httpx",
     "redis",
@@ -24,6 +25,7 @@ dependencies = [
     "email_validator",
     "jinja2",
     "orjson",
+    "openai",
     "uvloop",  # optional, speeds up async FastAPI
 ]
 
