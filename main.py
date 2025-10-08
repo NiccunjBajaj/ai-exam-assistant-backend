@@ -75,11 +75,6 @@ app.add_middleware(
 )
 
 
-# @app.post("/chat",dependencies=[Depends(RateLimiter(times=5,seconds=60))])
-# async def chat_with_ai(data: UserInput):
-#     gen_response = await generate_response(data.user_id,data.session_id,data.user_input,data.marks)
-#     return {"response": gen_response}
-
 
 
 #Protected
@@ -90,3 +85,8 @@ async def read_current_user(current_user = Depends(get_current_user)):
         "name": current_user.username,
         "email": current_user.email
     }
+
+if __name__ == "__main__":
+    import uvicorn
+    port = int(os.environ.get("PORT", 8000))
+    uvicorn.run("main:app", host="0.0.0.0", port=port)
