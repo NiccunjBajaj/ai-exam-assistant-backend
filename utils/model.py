@@ -9,7 +9,7 @@ import re
 from .prompt_format import get_or_prompt
 from DB.deps import db_dependency
 from memory.short_term import _get_stm, _save_to_stm
-from memory.long_term import retrive_similar_memories,check_and_update_ltm
+# from memory.long_term import retrive_similar_memories,check_and_update_ltm
 from memory.chat_history import save_user_and_bot_messages
 from DB.db_models import Session,FlashCards,StudySessions,Notes
 from api.routes.study_tools import flashcard,note
@@ -133,11 +133,11 @@ async def generate_response(user_id:str,session_id: str,user_input: str,marks: i
         print(f"Error getting short-term memory: {str(e)}")
         stm_history = []
 
-    try:
-        ltm_chunks = retrive_similar_memories(user_id=user_id, query=user_input, db=db)
-        ltm_context = "\n".join([chunk.content for chunk in ltm_chunks]) if ltm_chunks else ""
-    except Exception as e:
-        print(f"Error getting long-term memory: {str(e)}")
+    # try:
+    #     ltm_chunks = retrive_similar_memories(user_id=user_id, query=user_input, db=db)
+    #     ltm_context = "\n".join([chunk.content for chunk in ltm_chunks]) if ltm_chunks else ""
+    # except Exception as e:
+    #     print(f"Error getting long-term memory: {str(e)}")
         ltm_context = ""
 
     prompt = await get_or_prompt(user_input,marks,stm_history,ltm_context,session_id)
@@ -165,7 +165,7 @@ async def generate_response(user_id:str,session_id: str,user_input: str,marks: i
                 await _save_to_stm(user_id,session_id,role="bot",content=response)
                 save_user_and_bot_messages(db,user_id,session_id,user_input,response)
                 await redis_client.setex(cache_key,600,response)
-                check_and_update_ltm(user_id=user_id, session_id=session_id, db=db)
+                # check_and_update_ltm(user_id=user_id, session_id=session_id, db=db)
             except Exception as e:
                 print(f"Error saving chat history: {str(e)}")
             if intent in {"notes", "flashcard"}:
@@ -206,7 +206,7 @@ async def generate_response(user_id:str,session_id: str,user_input: str,marks: i
                 await _save_to_stm(user_id, session_id, role="bot", content=response)
                 save_user_and_bot_messages(db,user_id,session_id,user_input,response)
                 await redis_client.setex(cache_key,600,response)
-                check_and_update_ltm(user_id=user_id, session_id=session_id, db=db)
+                # check_and_update_ltm(user_id=user_id, session_id=session_id, db=db)
             except Exception as e:
                 print(f"Error saving chat history: {str(e)}")
             
