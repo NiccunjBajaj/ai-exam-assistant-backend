@@ -35,9 +35,11 @@ def get_my_plan(
         .scalar()
     )
     print(plan.name)
+    print(plan.id)
 
     return {
         "plan": plan.name,
+        "planId": plan.id,
         "limits": {
             "messages": plan.message_limit,
             "notes": plan.notes_limit,

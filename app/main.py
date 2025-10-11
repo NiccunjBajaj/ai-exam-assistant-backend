@@ -34,6 +34,7 @@ load_dotenv()
 GENAI_API_KEY = os.getenv("GENAI_API_KEY")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 OPENAI_BASE_URL = os.getenv("OPENAI_BASE_URL")
+FRONTEND_URL = os.getenv("FRONTEND_URL")
 
 # Configurations
 genai.configure(api_key=GENAI_API_KEY)
@@ -68,7 +69,7 @@ app.add_middleware(SlowAPIMiddleware)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],  # Explicitly allow frontend
+    allow_origins=["http://localhost:3000",FRONTEND_URL],  # Explicitly allow frontend
     allow_credentials=True,
     allow_methods=["*"],  # Allow all HTTP methods
     allow_headers=["*"],  # Allow all headers
