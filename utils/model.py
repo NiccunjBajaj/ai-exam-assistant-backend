@@ -140,7 +140,7 @@ async def generate_response(user_id:str,session_id: str,user_input: str,marks: i
     #     print(f"Error getting long-term memory: {str(e)}")
         ltm_context = ""
 
-    prompt = await get_or_prompt(user_input,marks,stm_history,ltm_context,session_id)
+    prompt = await get_or_prompt(user_input,marks,stm_history,session_id)
     intent = detect_study_intent(user_input)
 
     # Try GPT first since Gemini has quota issues

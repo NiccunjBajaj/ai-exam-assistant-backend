@@ -1,6 +1,6 @@
 from utils.redis_handler import redis_client as r
 
-async def get_or_prompt(user_input, marks, stm_history, ltm_context, session_id):
+async def get_or_prompt(user_input, marks, stm_history, session_id):
     redis_key = f"session_extracted_text:{session_id}"
     print(redis_key)
     extracted_text = await r.get(redis_key)
@@ -16,11 +16,6 @@ async def get_or_prompt(user_input, marks, stm_history, ltm_context, session_id)
             stm_text += f"- **User**: {user_msg}\n  **Bot**: {bot_msg}\n"
 
     # Format long-term memory context
-    ltm_text = ""
-    if ltm_context:
-        ltm_text += "\n### Relevant Past Knowledge (Long-Term Memory):\n"
-        ltm_text += ltm_context.strip()
-
     # Instruction formatting based on marks
     instruction_block = f"""
 #### Instructions:
@@ -42,7 +37,6 @@ async def get_or_prompt(user_input, marks, stm_history, ltm_context, session_id)
         await r.delete(redis_key)
         return f"""
 {stm_text}
-{ltm_text}
 
 ### New Question:
 **Extracted content from file**:\n{extracted_text}\n\n
@@ -57,7 +51,6 @@ async def get_or_prompt(user_input, marks, stm_history, ltm_context, session_id)
     else:
         return f"""
 {stm_text}
-{ltm_text}
 
 ### New Question:
 **User**:{user_input}
