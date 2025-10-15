@@ -67,9 +67,11 @@ app.include_router(test_router)
 app.state.limiter = limiter
 app.add_middleware(SlowAPIMiddleware)
 
+FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:3000")
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000",FRONTEND_URL],  # Explicitly allow frontend
+    allow_origins=["http://localhost:3000", FRONTEND_URL],  # Explicitly allow frontend
     allow_credentials=True,
     allow_methods=["*"],  # Allow all HTTP methods
     allow_headers=["*"],  # Allow all headers
