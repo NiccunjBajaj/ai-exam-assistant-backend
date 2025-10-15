@@ -58,6 +58,8 @@ app = FastAPI(lifespan=lifespan)
 
 FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:3000")
 
+print("🔗 FRONTEND_URL loaded as:", FRONTEND_URL)
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],  # Explicitly allow frontend
