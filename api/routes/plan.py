@@ -34,8 +34,6 @@ def get_my_plan(
         )
         .scalar()
     )
-    print(plan.name)
-    print(plan.id)
 
     return {
         "plan": plan.name,
