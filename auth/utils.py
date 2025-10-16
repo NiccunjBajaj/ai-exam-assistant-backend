@@ -15,11 +15,19 @@ ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
 
 pwd_context = CryptContext(schemes=['bcrypt'], deprecated = 'auto')
 
-def hash_pass(password:str) -> str:
+def hash_pass(password: str):
+    if isinstance(password, str):
+        password = password.encode("utf-8")
+    if len(password) > 72:
+        password = password[:72]
     return pwd_context.hash(password)
 
-def verify_pass(plain_pass:str,hashed_pass:str) -> bool:
-    return pwd_context.verify(plain_pass,hashed_pass)
+def verify_pass(plain_password: str, hashed_password: str):
+    if isinstance(plain_password, str):
+        plain_password = plain_password.encode("utf-8")
+    if len(plain_password) > 72:
+        plain_password = plain_password[:72]
+    return pwd_context.verify(plain_password, hashed_password)
 
 def create_access_token(data:dict,expires_date:timedelta) -> str:
     if not SECRET_KEY:
