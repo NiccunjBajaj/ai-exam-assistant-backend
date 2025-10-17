@@ -17,26 +17,31 @@ pwd_context = CryptContext(schemes=['bcrypt'], deprecated = 'auto')
 
 def hash_pass(password: str) -> str:
     """
-    Hash password safely for bcrypt.
-    bcrypt only supports up to 72 bytes; we truncate longer inputs before hashing.
+    Hash password safely for bcrypt (max 72 bytes).
     """
     if not isinstance(password, str):
         raise ValueError("Password must be a string")
 
-    # Truncate to 72 bytes worth of characters (not raw string length)
+    # Truncate to 72 bytes worth of characters
     encoded = password.encode("utf-8")
     if len(encoded) > 72:
-        encoded = encoded[:72]
-        # Decode back to str safely
-        password = encoded.decode("utf-8", errors="ignore")
+        password = encoded[:72].decode("utf-8", errors="ignore")
 
+    # Passlib will handle encoding internally
     return pwd_context.hash(password)
 
-def verify_pass(plain_password: str, hashed_password: str):
-    if isinstance(plain_password, str):
-        plain_password = plain_password.encode("utf-8")
-    if len(plain_password) > 72:
-        plain_password = plain_password[:72]
+
+def verify_pass(plain_password: str, hashed_password: str) -> bool:
+    """
+    Verify password safely (truncate if longer than 72 bytes).
+    """
+    if not isinstance(plain_password, str):
+        raise ValueError("Password must be a string")
+
+    encoded = plain_password.encode("utf-8")
+    if len(encoded) > 72:
+        plain_password = encoded[:72].decode("utf-8", errors="ignore")
+
     return pwd_context.verify(plain_password, hashed_password)
 
 def create_access_token(data:dict,expires_date:timedelta) -> str:
