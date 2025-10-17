@@ -17,9 +17,9 @@ class User(Base):
     email = Column(String, unique=True, nullable=False)
     hashed_password = Column(String, nullable=True)  # Null if Google-auth
     is_verified = Column(Boolean, default=False)
-    verfication_token = Column(Text, nullable=True)
+    verification_token = Column(Text, nullable=True)
     reset_password_token = Column(String, nullable=True)
-    reset_password_expiry = Column(Date, nullable=True)
+    reset_password_expiry = Column(DateTime, nullable=True)
     plan = Column(String, default="free")
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
