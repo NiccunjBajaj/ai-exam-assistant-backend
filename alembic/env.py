@@ -6,7 +6,7 @@ from sqlalchemy import pool
 from alembic import context
 import os,sys
 
-from databas import Base
+from app.databas import Base
 from DB.db_models import User, Session, Message, LongTermMemory
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))

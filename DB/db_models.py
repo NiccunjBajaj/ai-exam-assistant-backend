@@ -1,5 +1,5 @@
 import uuid
-from sqlalchemy import Column, Integer, String, Text, ForeignKey, DateTime, JSON, UniqueConstraint, Boolean, Date, Float
+from sqlalchemy import VARCHAR, Column, Integer, String, Text, ForeignKey, DateTime, JSON, UniqueConstraint, Boolean, Date, Float
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 from datetime import datetime, timezone, date
@@ -16,6 +16,10 @@ class User(Base):
     username = Column(String, nullable=False)
     email = Column(String, unique=True, nullable=False)
     hashed_password = Column(String, nullable=True)  # Null if Google-auth
+    is_verified = Column(Boolean, default=False)
+    verfication_token = Column(Text, nullable=True)
+    reset_password_token = Column(String, nullable=True)
+    reset_password_expiry = Column(Date, nullable=True)
     plan = Column(String, default="free")
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
