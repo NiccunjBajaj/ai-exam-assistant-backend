@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Request, Body
 from datetime import datetime, timezone
-from uuid import UUID
+from uuid import UUID, uuid4
 from sqlalchemy.orm import Session
 
 from DB.deps import get_db, db_dependency
@@ -75,19 +75,18 @@ def create_session(
     session_data: dict = Body(...),
     user_data: dict = Depends(get_current_user),
 ):
-    session_id = session_data.get("session_id")
     title = session_data.get("title")
 
-    session = Session(
-        id=session_id,
+    new_session = Session(
+        id=uuid4(),
         user_id=user_data.id,
         title=title,
-        created_at=datetime.utcnow(),
+        created_at=datetime.now(timezone.utc),
     )
-    db.add(session)
+    db.add(new_session)
     db.commit()
-    db.refresh(session)
-    return {"session_id": session.id}
+    db.refresh(new_session)
+    return {"session_id": str(new_session.id)}
 
 @router.get("/session-exists/{session_id}")
 def session_exists(session_id: UUID, db: Session = Depends(get_db), user=Depends(get_current_user)):
