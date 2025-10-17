@@ -56,9 +56,7 @@ async def lifespan(app: FastAPI):
     yield
 app = FastAPI(lifespan=lifespan)
 
-origins = [os.getenv("FRONTEND_URL", "https://www.learnee.space")]
-
-print("🔗 FRONTEND_URL loaded as:", FRONTEND_URL)
+origins = [os.getenv("FRONTEND_URL", "https://www.learnee.space","https://learnee.space")]
 
 app.add_middleware(
     CORSMiddleware,
