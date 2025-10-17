@@ -1,5 +1,5 @@
 from datetime import timedelta, timezone, datetime
-from passlib.context import CryptContext
+import bcrypt
 from fastapi import HTTPException
 from starlette import status
 from jose import jwt,JWTError
@@ -13,36 +13,36 @@ load_dotenv()
 SECRET_KEY = os.getenv("SECRET_KEY")
 ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
 
-pwd_context = CryptContext(schemes=['bcrypt'], deprecated = 'auto')
-
 def hash_pass(password: str) -> str:
     """
-    Hash password safely for bcrypt (max 72 bytes).
+    Hash a password using bcrypt with truncation for >72 bytes.
     """
     if not isinstance(password, str):
         raise ValueError("Password must be a string")
 
-    # Truncate to 72 bytes worth of characters
-    encoded = password.encode("utf-8")
-    if len(encoded) > 72:
-        password = encoded[:72].decode("utf-8", errors="ignore")
+    # Encode and truncate manually
+    password_bytes = password.encode("utf-8")
+    if len(password_bytes) > 72:
+        password_bytes = password_bytes[:72]
 
-    # Passlib will handle encoding internally
-    return pwd_context.hash(password)
+    # Generate salt and hash
+    salt = bcrypt.gensalt()
+    hashed = bcrypt.hashpw(password_bytes, salt)
+    return hashed.decode("utf-8")
 
 
 def verify_pass(plain_password: str, hashed_password: str) -> bool:
     """
-    Verify password safely (truncate if longer than 72 bytes).
+    Verify a password against its hashed value.
     """
-    if not isinstance(plain_password, str):
-        raise ValueError("Password must be a string")
+    password_bytes = plain_password.encode("utf-8")
+    if len(password_bytes) > 72:
+        password_bytes = password_bytes[:72]
 
-    encoded = plain_password.encode("utf-8")
-    if len(encoded) > 72:
-        plain_password = encoded[:72].decode("utf-8", errors="ignore")
-
-    return pwd_context.verify(plain_password, hashed_password)
+    try:
+        return bcrypt.checkpw(password_bytes, hashed_password.encode("utf-8"))
+    except ValueError:
+        return False
 
 def create_access_token(data:dict,expires_date:timedelta) -> str:
     if not SECRET_KEY:
