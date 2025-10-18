@@ -43,7 +43,7 @@ def enforce_message_limit(
 
 def enforce_notes_limit(
     db: Session = Depends(get_db),
-    user=Depends(user_dependency),
+    user=Depends(get_current_user),
 ):
     """Checks if user has exceeded their notes quota."""
     plan = user.subscription.plan
@@ -65,7 +65,7 @@ def enforce_notes_limit(
 
 def enforce_flashcards_limit(
     db: Session = Depends(get_db),
-    user=Depends(user_dependency),
+    user=Depends(get_current_user),
 ):
     """Checks if user has exceeded their flashcards quota."""
     plan = user.subscription.plan

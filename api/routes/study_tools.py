@@ -1,6 +1,7 @@
 from typing import List
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Body
 from datetime import datetime, timezone
+from sqlalchemy.orm import Session
 import uuid
 from uuid import UUID
 from pydantic import BaseModel
@@ -11,7 +12,7 @@ from sqlalchemy import func, case
 from sqlalchemy.dialects.postgresql import insert
 
 from DB.db_models import Notes, FlashCards, StudySessions, QuizQuestion, Message, QuizAttempt, Session as ChatSession
-from DB.deps import db_dependency
+from DB.deps import db_dependency, get_db
 from auth.deps import get_current_user
 from auth.limits import enforce_flashcards_limit, enforce_notes_limit
 from utils.model1 import flashcard, note, quiz
@@ -36,7 +37,6 @@ class GenReq(BaseModel):
     file_name: str
     marks: int = 5
     title: str
-    mode: str = "short"
     
 class GenReq1(BaseModel):
     marks: int = 5
@@ -66,9 +66,9 @@ router = APIRouter()
 
 @router.post("/generate-notes")
 async def generate_notes(
-    db: db_dependency,
     req: GenReq,
-    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
     _ = Depends(enforce_notes_limit),
 ):
     notes_text = await note(req.user_input,req.marks)
@@ -103,9 +103,9 @@ async def generate_notes(
 
 @router.post("/generate-flashcards")
 async def generate_flashcards(
-    db : db_dependency,
     req: GenReq,
-    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
     _ = Depends(enforce_flashcards_limit),
 ):
     response = await flashcard(req.user_input,req.marks)
@@ -153,9 +153,9 @@ async def generate_flashcards(
 
 @router.post("/generate-quiz")
 async def generate_quiz(
-    db: db_dependency,
     req: GenReq,
-    current_user: dict = Depends(get_current_user)
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
 ):
     response = await quiz(req.user_input, req.marks, req.mode)
     

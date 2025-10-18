@@ -1,3 +1,4 @@
+from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Request, Body
 from datetime import datetime, timezone
 from uuid import UUID, uuid4
@@ -19,7 +20,7 @@ import requests
 router = APIRouter()
 
 class ChatRequest(BaseModel):
-    session_id: UUID
+    session_id: Optional[UUID]
     user_input: str
     marks: int
 
