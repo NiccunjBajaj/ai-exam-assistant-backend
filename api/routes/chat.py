@@ -100,28 +100,78 @@ async def chat_endpoint(
     data: ChatRequest = Body(...),
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
-    _ = Depends(enforce_message_limit)  # ✅ only runs limit check
-):  
+    _ = Depends(enforce_message_limit)
+): 
     try:
-        user_id = str(current_user.id)  # Access id as an attribute and convert to string
-        
+        user_id = str(current_user.id)
+        session_id = data.session_id
+        new_session_details = {}
+
+        # ✅ Create new session if one doesn't exist
+        if not session_id:
+            title = data.user_input[:50] or "New Chat"
+            new_session = Session(
+                id=uuid4(),
+                user_id=current_user.id,
+                title=title,
+                created_at=datetime.now(timezone.utc),
+            )
+            db.add(new_session)
+            db.commit()
+            db.refresh(new_session)
+            session_id = new_session.id
+            # Store new session info to return later
+            new_session_details = {
+                "title": new_session.title,
+                "created_at": new_session.created_at.isoformat(),
+            }
+
+        # ✅ Store user message (This will now run for new sessions too)
+        new_message = Message(
+            id=uuid4(),
+            session_id=session_id,
+            sender="user",
+            content=data.user_input,
+            timestamp=datetime.now(timezone.utc),
+        )
+        db.add(new_message)
+
+        # ✅ Generate response
         response = await generate_response(
             user_id=user_id,
-            session_id=data.session_id,
+            session_id=session_id,
             user_input=data.user_input,
             marks=data.marks,
             db=db
         )
+
+        # ✅ Store bot message
+        bot_message = Message(
+            id=uuid4(),
+            session_id=session_id,
+            sender="bot",
+            content=response,
+            timestamp=datetime.now(timezone.utc),
+        )
+        db.add(bot_message)
         
+        # Commit all DB changes together
+        db.commit()
+
         # Track message usage
         track_message_usage(user_id, db)
         
-        return {"response": response}
+        # Return the response, including new session details if applicable
+        return {
+            "session_id": str(session_id), 
+            "response": response,
+            **new_session_details  # Unpack title and created_at if they exist
+        }
     except RateLimitExceeded:
-        raise HTTPException(status_code=429, detail="Rate limit exceeded. Please slow down.")
+        raise HTTPException(status_code=429, detail="Rate limit exceeded.")
     except Exception as e:
-        error_detail = f"Error: {str(e)}\nTraceback: {traceback.format_exc()}"
-        print(error_detail)  # Log the full error for debugging
+        print(traceback.format_exc())
+        db.rollback() # Rollback changes if an error occurs
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.put("/rename-session/{session_id}")
