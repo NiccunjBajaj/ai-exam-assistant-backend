@@ -20,7 +20,7 @@ from utils.rate_limiter import limiter
 from api.routes.file_upload import router as up_router
 from api.routes.study_tools import router as study_router
 from utils.redis_handler import redis_client
-from utils.model1 import init_model1
+from utils.model1 import init_gemini, init_gpt
 from api.routes.plan import router as plan_router
 from api.routes.payment import router as payment_router
 from api.routes.test import router as test_router
@@ -52,7 +52,8 @@ async def lifespan(app: FastAPI):
     await FastAPILimiter.init(redis_client)
     init_models(model, client, redis_client)
     init_model(model)
-    init_model1(client)
+    init_gpt(client)
+    init_gemini(model)
     yield
 app = FastAPI(lifespan=lifespan)
 

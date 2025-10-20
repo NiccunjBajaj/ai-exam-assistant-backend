@@ -5,7 +5,9 @@ from uuid import UUID, uuid4
 from sqlalchemy.orm import Session
 
 from DB.deps import get_db, db_dependency
-from DB.db_models import Session, Message
+from DB.db_models import Session, Message, User
+from utils.credit_refil import refill_daily_credits
+from utils.credits_manager import calculate_chat_cost, deduct_credits
 from auth.deps import get_current_user
 from utils.model import generate_response
 from auth.limits import enforce_message_limit
@@ -101,7 +103,6 @@ async def chat_endpoint(
     data: ChatRequest = Body(...),
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
-    _ = Depends(enforce_message_limit)
 ): 
     try:
         user_id = str(current_user.id)
@@ -137,6 +138,15 @@ async def chat_endpoint(
         )
         db.add(new_message)
 
+        user = db.query(User).filter(User.id == current_user.id).first()
+        refill_daily_credits(db, user)
+
+        # 2️⃣ Calculate cost dynamically
+        chat_cost = calculate_chat_cost(data.user_input)
+
+        # 3️⃣ Deduct credits
+        deduct_credits(db, user, chat_cost)
+
         # ✅ Generate response
         response = await generate_response(
             user_id=user_id,
@@ -157,16 +167,15 @@ async def chat_endpoint(
         db.add(bot_message)
         
         # Commit all DB changes together
-        db.commit()
-
-        # Track message usage
-        track_message_usage(user_id, db)
+        db.commit()        
         
         # Return the response, including new session details if applicable
         return {
             "session_id": str(session_id), 
             "response": response,
-            **new_session_details  # Unpack title and created_at if they exist
+            **new_session_details,  # Unpack title and created_at if they exist
+            "credits_used": chat_cost,
+            "credits_left": user.credits
         }
     except RateLimitExceeded:
         raise HTTPException(status_code=429, detail="Rate limit exceeded.")

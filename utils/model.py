@@ -145,7 +145,7 @@ async def generate_response(user_id:str,session_id: str,user_input: str,marks: i
 
     # Try GPT first since Gemini has quota issues
     try:
-        print(f"🔍 Generating response with GPT-4o")
+        print(f"🔍 Generating response with GPT-4.1")
         response_raw = await asyncio.wait_for(
             asyncio.to_thread(
                 lambda: client.chat.completions.create(

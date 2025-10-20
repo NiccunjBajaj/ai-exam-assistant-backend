@@ -22,6 +22,9 @@ class User(Base):
     reset_password_expiry = Column(DateTime, nullable=True)
     plan = Column(String, default="free")
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+    credits = Column(Integer, default=50)  # 💳 Free users start with 50
+    last_credit_update = Column(DateTime(timezone=True), default=func.now())
+
 
     sessions = relationship("Session", back_populates="user", cascade="all, delete-orphan")
     long_term_memories = relationship("LongTermMemory", back_populates="user", cascade="all, delete-orphan")
@@ -42,6 +45,8 @@ class Plan(Base):
     message_limit = Column(Integer, nullable=True)   # e.g. None = unlimited
     notes_limit = Column(Integer, nullable=True)
     flashcards_limit = Column(Integer, nullable=True)
+    daily_credit_refill = Column(Integer, default=15)   # 💳 Added daily
+    max_credits = Column(Integer, default=300)        
 
     subscriptions = relationship("UserSubscription", back_populates="plan")
 

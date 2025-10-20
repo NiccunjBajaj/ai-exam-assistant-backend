@@ -11,8 +11,10 @@ from openai import OpenAI
 from sqlalchemy import func, case
 from sqlalchemy.dialects.postgresql import insert
 
-from DB.db_models import Notes, FlashCards, StudySessions, QuizQuestion, Message, QuizAttempt, Session as ChatSession
+from DB.db_models import Notes, FlashCards, StudySessions, QuizQuestion, Message, QuizAttempt, Session as ChatSession, User
 from DB.deps import db_dependency, get_db
+from utils.credit_refil import refill_daily_credits
+from utils.credits_manager import deduct_credits
 from auth.deps import get_current_user
 from auth.limits import enforce_flashcards_limit, enforce_notes_limit
 from utils.model1 import flashcard, note, quiz
@@ -22,6 +24,9 @@ load_dotenv()
 
 OPENAI_API_KEY2 = os.getenv("OPENAI_API_KEY2")
 OPENAI_BASE_URL = os.getenv("OPENAI_BASE_URL")
+
+NOTE_COST = 10
+FLASHCARD_COST = 15
 
 client = OpenAI(
     base_url=OPENAI_BASE_URL,
@@ -37,6 +42,14 @@ class GenReq(BaseModel):
     file_name: str
     marks: int = 5
     title: str
+
+class GenReqQuiz(BaseModel):
+    user_input: str
+    source: str
+    file_name: str
+    marks: int = 5
+    title: str
+    mode: str = "short"
     
 class GenReq1(BaseModel):
     marks: int = 5
@@ -69,8 +82,10 @@ async def generate_notes(
     req: GenReq,
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
-    _ = Depends(enforce_notes_limit),
+    # _ = Depends(enforce_notes_limit),
 ):
+    user = db.query(User).filter(User.id == current_user.id).first()
+
     notes_text = await note(req.user_input,req.marks)
     if not notes_text:
         raise HTTPException(502, "LLM failed to generate notes")
@@ -97,7 +112,9 @@ async def generate_notes(
     db.commit()
     
     # Track notes usage
-    track_notes_usage(str(current_user.id), db)
+    refill_daily_credits(db, user)
+    deduct_credits(db, user, NOTE_COST)
+    # track_notes_usage(str(current_user.id), db)
 
     return {"session_id": str(session.id),"notes": notes_text}
 
@@ -106,8 +123,11 @@ async def generate_flashcards(
     req: GenReq,
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
-    _ = Depends(enforce_flashcards_limit),
+    # _ = Depends(enforce_flashcards_limit),
 ):
+
+    user = db.query(User).filter(User.id == current_user.id).first()
+
     response = await flashcard(req.user_input,req.marks)
     if not response:
         raise HTTPException(status_code=502, detail="LLM failed to generate flashcards")
@@ -147,13 +167,15 @@ async def generate_flashcards(
     db.commit()
     
     # Track flashcards usage
-    track_flashcards_usage(str(current_user.id), db)
+    refill_daily_credits(db, user)
+    deduct_credits(db, user, NOTE_COST)
+    # track_flashcards_usage(str(current_user.id), db)
     
     return {"flashcards": [{"question": q, "answer": a} for q, a in flashcards]}
 
 @router.post("/generate-quiz")
 async def generate_quiz(
-    req: GenReq,
+    req: GenReqQuiz,
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
 ):

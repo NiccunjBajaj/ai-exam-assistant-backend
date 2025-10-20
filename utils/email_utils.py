@@ -1,5 +1,5 @@
 # utils/email_utils.py
-import mailchimp_transactional as MailchimpTransactional
+from mailchimp_transactional import Client
 import os
 
 MAILCHIMP_API_KEY = os.getenv("MAILCHIMP_API_KEY")
@@ -7,7 +7,7 @@ FROM_EMAIL = os.getenv("MAILCHIMP_FROM_EMAIL", "no-reply@learnee.space")
 REPLY_TO_EMAIL = os.getenv("REPLY_TO_EMAIL", "support@learnee.space")
 FROM_NAME = os.getenv("MAILCHIMP_FROM_NAME", "Learnee")
 
-client = MailchimpTransactional.Client(MAILCHIMP_API_KEY)
+client = Client(MAILCHIMP_API_KEY)
 
 
 def send_verification_email(to_email: str, username: str, verify_link: str):
@@ -39,9 +39,10 @@ def send_verification_email(to_email: str, username: str, verify_link: str):
     }
 
     try:
-        client.messages.send({"message": message})
+        result = client.messages.send({"message": message})
+        print("Mailchimp send success:", result)
     except Exception as e:
-        print("Mailchimp send error:", e)
+        print("Mailchimp send error:", e.text)
 
 def send_reset_password_email(to_email: str, username: str, reset_link: str):
     html_content = f"""
@@ -72,5 +73,5 @@ def send_reset_password_email(to_email: str, username: str, reset_link: str):
     try:
         client.messages.send({"message": message})
     except Exception as e:
-        print("Mailchimp send error:", e)
+        print("Mailchimp send error:", e.text)
 
