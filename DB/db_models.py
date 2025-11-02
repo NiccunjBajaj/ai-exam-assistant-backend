@@ -64,8 +64,12 @@ class UserSubscription(Base):
     is_active = Column(Boolean, default=True)
 
     # Razorpay integration later: store payment/order IDs
-    razorpay_order_id = Column(String, nullable=True)
+    razorpay_subscription_id = Column(String, nullable=True)
+    razorpay_plan_id = Column(String, nullable=True)
+    next_billing_date = Column(DateTime, nullable=True)
+    payment_status = Column(String, default="created")  # created, active, completed, failed
     razorpay_payment_id = Column(String, nullable=True)
+    razorpay_order_id = Column(String, nullable=True)
 
     plan = relationship("Plan", back_populates="subscriptions")
     user = relationship("User", back_populates="subscription")

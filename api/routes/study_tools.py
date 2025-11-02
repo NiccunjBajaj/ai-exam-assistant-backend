@@ -13,6 +13,7 @@ from sqlalchemy.dialects.postgresql import insert
 
 from DB.db_models import Notes, FlashCards, StudySessions, QuizQuestion, Message, QuizAttempt, Session as ChatSession, User
 from DB.deps import db_dependency, get_db
+from utils.exceptions import OutOfCreditsError
 from utils.credit_refil import refill_daily_credits
 from utils.credits_manager import deduct_credits
 from auth.deps import get_current_user
@@ -86,6 +87,13 @@ async def generate_notes(
 ):
     user = db.query(User).filter(User.id == current_user.id).first()
 
+    # Track notes usage
+    refill_daily_credits(db, user)
+    success, remaining = deduct_credits(db, user, NOTE_COST)
+
+    if not success:
+        raise OutOfCreditsError()
+
     notes_text = await note(req.user_input,req.marks)
     if not notes_text:
         raise HTTPException(502, "LLM failed to generate notes")
@@ -111,12 +119,13 @@ async def generate_notes(
     db.add(note_obj)
     db.commit()
     
-    # Track notes usage
-    refill_daily_credits(db, user)
-    deduct_credits(db, user, NOTE_COST)
     # track_notes_usage(str(current_user.id), db)
 
-    return {"session_id": str(session.id),"notes": notes_text}
+    return {
+        "session_id": str(session.id),
+        "notes": notes_text,
+        "credits":remaining,
+    }
 
 @router.post("/generate-flashcards")
 async def generate_flashcards(
@@ -127,6 +136,13 @@ async def generate_flashcards(
 ):
 
     user = db.query(User).filter(User.id == current_user.id).first()
+
+     # Track flashcards usage
+    refill_daily_credits(db, user)
+    success, remaining = deduct_credits(db, user, FLASHCARD_COST)
+
+    if not success:
+        raise OutOfCreditsError()
 
     response = await flashcard(req.user_input,req.marks)
     if not response:
@@ -166,12 +182,12 @@ async def generate_flashcards(
         db.add(card)
     db.commit()
     
-    # Track flashcards usage
-    refill_daily_credits(db, user)
-    deduct_credits(db, user, NOTE_COST)
     # track_flashcards_usage(str(current_user.id), db)
     
-    return {"flashcards": [{"question": q, "answer": a} for q, a in flashcards]}
+    return {
+        "flashcards": [{"question": q, "answer": a} for q, a in flashcards],
+        "credits":remaining
+    }
 
 @router.post("/generate-quiz")
 async def generate_quiz(
@@ -880,3 +896,12 @@ def delete_session(session_id: UUID, db: db_dependency, current_user: dict = Dep
     db.delete(session)
     db.commit()
     return {"detail": "Session deleted successfully"}
+
+@router.put("/study-rename-session/{session_id}")
+def rename_session(session_id: UUID, db: Session = Depends(get_db), user=Depends(get_current_user), data: dict = Body(...)):
+    session = db.query(StudySessions).filter_by(id=session_id, user_id=user.id).first()
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    session.title = data.get("title", session.title)
+    db.commit()
+    return {"message": "Renamed successfully"}

@@ -112,6 +112,7 @@ async def generate_response(user_id:str,session_id: str,user_input: str,marks: i
     Returns:
     str: The generated response or an error message.
     """
+
     if not model or not client:
         raise Exception("AI models not initialized. Please check server configuration.")
 
@@ -163,7 +164,7 @@ async def generate_response(user_id:str,session_id: str,user_input: str,marks: i
                 ensure_session_exists(session_id, user_id, db)
                 await _save_to_stm(user_id,session_id,role="user",content=user_input)
                 await _save_to_stm(user_id,session_id,role="bot",content=response)
-                save_user_and_bot_messages(db,user_id,session_id,user_input,response)
+                # Don't save to DB here - it's already saved in the chat endpoint
                 await redis_client.setex(cache_key,600,response)
                 # check_and_update_ltm(user_id=user_id, session_id=session_id, db=db)
             except Exception as e:
@@ -204,7 +205,7 @@ async def generate_response(user_id:str,session_id: str,user_input: str,marks: i
                 ensure_session_exists(session_id, user_id, db)
                 await _save_to_stm(user_id, session_id, role="user", content=user_input)
                 await _save_to_stm(user_id, session_id, role="bot", content=response)
-                save_user_and_bot_messages(db,user_id,session_id,user_input,response)
+                # Don't save to DB here - it's already saved in the chat endpoint
                 await redis_client.setex(cache_key,600,response)
                 # check_and_update_ltm(user_id=user_id, session_id=session_id, db=db)
             except Exception as e:

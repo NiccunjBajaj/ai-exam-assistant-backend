@@ -23,7 +23,8 @@ from utils.redis_handler import redis_client
 from utils.model1 import init_gemini, init_gpt
 from api.routes.plan import router as plan_router
 from api.routes.payment import router as payment_router
-from api.routes.test import router as test_router
+# from api.routes.test import router as test_router
+from api.routes.users import router as user_router
 
 import tracemalloc
 
@@ -73,7 +74,8 @@ app.include_router(up_router)
 app.include_router(study_router)
 app.include_router(plan_router)
 app.include_router(payment_router)
-app.include_router(test_router)
+# app.include_router(test_router)
+app.include_router(user_router)
 
 app.state.limiter = limiter
 app.add_middleware(SlowAPIMiddleware)

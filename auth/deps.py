@@ -22,7 +22,7 @@ def get_current_user(token : Annotated[str,Depends(oauth2_scheme)],db:db_depende
         user_id:str = payload.get('sub')
         if not user_id:
             raise credentials_execption
-    except JWTError:
+    except (JWTError, HTTPException):
         raise credentials_execption
     
     user = db.query(User).filter(User.id == user_id).first()

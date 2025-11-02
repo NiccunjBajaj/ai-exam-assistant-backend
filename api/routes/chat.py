@@ -6,12 +6,11 @@ from sqlalchemy.orm import Session
 
 from DB.deps import get_db, db_dependency
 from DB.db_models import Session, Message, User
+from utils.exceptions import RateLimitError,OutOfCreditsError,GenericServerError
 from utils.credit_refil import refill_daily_credits
 from utils.credits_manager import calculate_chat_cost, deduct_credits
 from auth.deps import get_current_user
 from utils.model import generate_response
-from auth.limits import enforce_message_limit
-from utils.usage_tracker import track_message_usage
 
 from pydantic import BaseModel
 from slowapi.errors import RateLimitExceeded
@@ -145,7 +144,10 @@ async def chat_endpoint(
         chat_cost = calculate_chat_cost(data.user_input)
 
         # 3️⃣ Deduct credits
-        deduct_credits(db, user, chat_cost)
+        success, remaining = deduct_credits(db, user, chat_cost)
+
+        if not success:
+            raise OutOfCreditsError()
 
         # ✅ Generate response
         response = await generate_response(
@@ -175,14 +177,17 @@ async def chat_endpoint(
             "response": response,
             **new_session_details,  # Unpack title and created_at if they exist
             "credits_used": chat_cost,
-            "credits_left": user.credits
+            "credits_left": remaining,
         }
+    except OutOfCreditsError:
+        db.rollback()
+        raise
     except RateLimitExceeded:
-        raise HTTPException(status_code=429, detail="Rate limit exceeded.")
+        raise RateLimitError()
     except Exception as e:
         print(traceback.format_exc())
-        db.rollback() # Rollback changes if an error occurs
-        raise HTTPException(status_code=500, detail=str(e))
+        db.rollback()
+        raise GenericServerError(str(e))
 
 @router.put("/rename-session/{session_id}")
 def rename_session(session_id: UUID, db: Session = Depends(get_db), user=Depends(get_current_user), data: dict = Body(...)):

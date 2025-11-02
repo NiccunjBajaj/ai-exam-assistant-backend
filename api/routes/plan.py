@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from sqlalchemy import func
-from typing import List
+from typing import List, Optional
 from datetime import datetime, timezone, timedelta
 from pydantic import BaseModel
 
@@ -10,6 +10,15 @@ from DB.db_models import Plan, UserSubscription, Message
 from auth.deps import get_current_user, user_dependency, get_current_plan
 
 router = APIRouter(prefix="/plan", tags=["Plan"])
+
+class PlanResponse(BaseModel):
+    id: int
+    name: str
+    price: float
+    message_limit: Optional[int]
+    notes_limit: Optional[int]
+    flashcards_limit: Optional[int]
+    billing_cycle: Optional[str]
 
 class UpgradeRequest(BaseModel):
     subscription_type: str
@@ -50,19 +59,22 @@ def get_my_plan(
     }
 
 # List all available plans (for upgrading)
-@router.get("/all", response_model=List[dict])
+@router.get("/all", response_model=List[PlanResponse])
 def list_plans(db: Session = Depends(get_db)):
     plans = db.query(Plan).filter(Plan.is_active == True).all()
-    return [
-        {
+    
+    result = []
+    for p in plans:
+        result.append({
             "id": p.id,
             "name": p.name,
             "price": p.price,
             "message_limit": p.message_limit,
             "notes_limit": p.notes_limit,
-            "flashcards_limit": p.flashcards_limit
-        } for p in plans
-    ]
+            "flashcards_limit": p.flashcards_limit,
+            "billing_cycle": p.billing_cycle,  # ✅
+        })
+    return result
 
 # Upgrade plan (manual for now, Razorpay later)
 @router.post("/upgrade/{plan_id}")
@@ -86,8 +98,12 @@ def upgrade_plan(
     else:
         raise HTTPException(status_code=400, detail="Invalid subscription_type")
 
-    # Check if user already has a subscription
-    subscription = user.subscription
+    # Check if user already has an active subscription
+    subscription = db.query(UserSubscription).filter(
+        UserSubscription.user_id == user.id,
+        UserSubscription.is_active == True
+    ).first()
+    
     if subscription:
         subscription.plan_id = plan.id
         subscription.start_date = start_date

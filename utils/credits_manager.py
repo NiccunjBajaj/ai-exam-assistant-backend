@@ -2,17 +2,14 @@ from fastapi import HTTPException
 from sqlalchemy.orm import Session
 from DB.db_models import User
 
-def deduct_credits(db: Session, user: User, amount: int):
-    """Deduct credits safely."""
-    if user.credits < amount:
-        raise HTTPException(
-            status_code=402,
-            detail="Insufficient credits. Please upgrade or top up."
-        )
-    user.credits -= amount
+def deduct_credits(db, user, cost: int):
+    """Safely deduct credits and return (success, remaining_credits)."""
+    if user.credits < cost:
+        return False, user.credits
+    user.credits -= cost
     db.commit()
     db.refresh(user)
-    return user.credits
+    return True, user.credits
 
 def calculate_chat_cost(user_input: str) -> int:
     """
