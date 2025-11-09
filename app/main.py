@@ -34,9 +34,9 @@ tracemalloc.start()
 load_dotenv()
 
 #API Keys
-GENAI_API_KEY = os.getenv("GENAI_API_KEY")
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-OPENAI_BASE_URL = os.getenv("OPENAI_BASE_URL")
+# GENAI_API_KEY = os.getenv("GENAI_API_KEY")
+# OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+# OPENAI_BASE_URL = os.getenv("OPENAI_BASE_URL")
 SAVARAM_API = os.getenv("SAVARAM_API")
 FRONTEND_URL = os.getenv("FRONTEND_URL")
 
