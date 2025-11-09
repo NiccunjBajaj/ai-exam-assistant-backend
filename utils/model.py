@@ -24,10 +24,9 @@ model = None
 client = None
 redis_client: Redis = None
 
-def init_models(gemini,gpt,redis_instance):
-    global model, client, redis_client
-    model = gemini
-    client = gpt
+def init_sarvam_chat(sarvam,redis_instance):
+    global client, redis_client
+    client = sarvam
     redis_client = redis_instance
 
 class UserInput(BaseModel): #user input and marks
@@ -191,45 +190,45 @@ async def generate_response(user_id:str,session_id: str,user_input: str,marks: i
         print(f"GPT error: {str(e)}")
 
     # Fallback to Gemini if GPT fails
-    try:
-        response_raw = await asyncio.wait_for(asyncio.to_thread(model.generate_content,prompt),timeout=TIMEOUT)
-        response = response_raw.text
-        if intent == "notes":
-            response += "\n\n📝 I've created notes for this. Check your Study tab!"
-        elif intent == "flashcards":
-            response += "\n\n📚 Flashcards have been generated for your prompt!"
-        if response:
-            try:
-                ensure_session_exists(session_id, user_id, db)
-                await _save_to_stm(user_id, session_id, role="user", content=user_input)
-                await _save_to_stm(user_id, session_id, role="bot", content=response)
-                # Don't save to DB here - it's already saved in the chat endpoint
-                await redis_client.setex(cache_key,600,response)
-                # check_and_update_ltm(user_id=user_id, session_id=session_id, db=db)
-            except Exception as e:
-                print(f"Error saving chat history: {str(e)}")
+    # try:
+    #     response_raw = await asyncio.wait_for(asyncio.to_thread(model.generate_content,prompt),timeout=TIMEOUT)
+    #     response = response_raw.text
+    #     if intent == "notes":
+    #         response += "\n\n📝 I've created notes for this. Check your Study tab!"
+    #     elif intent == "flashcards":
+    #         response += "\n\n📚 Flashcards have been generated for your prompt!"
+    #     if response:
+    #         try:
+    #             ensure_session_exists(session_id, user_id, db)
+    #             await _save_to_stm(user_id, session_id, role="user", content=user_input)
+    #             await _save_to_stm(user_id, session_id, role="bot", content=response)
+    #             # Don't save to DB here - it's already saved in the chat endpoint
+    #             await redis_client.setex(cache_key,600,response)
+    #             # check_and_update_ltm(user_id=user_id, session_id=session_id, db=db)
+    #         except Exception as e:
+    #             print(f"Error saving chat history: {str(e)}")
             
-            if intent in {"notes", "flashcard"}:
-                try:
-                    asyncio.create_task(trigger_study_generation(
-                        user_input=user_input,
-                        intent=intent,
-                        user_id=user_id,
-                        db=db,
-                        marks=marks,
-                    ))
-                    if intent == "notes":
-                        response += "\n\n📝 I've also generated notes for you. You can check them in the Study tab."
-                    elif intent == "flashcard":
-                        response += "\n\n📚 Flashcards for this topic are available in your Study tab."
-                except Exception as e:
-                    print("Study trigger error:", str(e))
-            return response
-        else:
-            raise Exception("No response from the model")
-    except asyncio.TimeoutError:
-        print(f"❌ Gemini Timeout😴")
-    except Exception as e:
-        print(f"Gemini error: {str(e)}")
+    #         if intent in {"notes", "flashcard"}:
+    #             try:
+    #                 asyncio.create_task(trigger_study_generation(
+    #                     user_input=user_input,
+    #                     intent=intent,
+    #                     user_id=user_id,
+    #                     db=db,
+    #                     marks=marks,
+    #                 ))
+    #                 if intent == "notes":
+    #                     response += "\n\n📝 I've also generated notes for you. You can check them in the Study tab."
+    #                 elif intent == "flashcard":
+    #                     response += "\n\n📚 Flashcards for this topic are available in your Study tab."
+    #             except Exception as e:
+    #                 print("Study trigger error:", str(e))
+    #         return response
+    #     else:
+    #         raise Exception("No response from the model")
+    # except asyncio.TimeoutError:
+    #     print(f"❌ Gemini Timeout😴")
+    # except Exception as e:
+    #     print(f"Gemini error: {str(e)}")
         
     raise Exception("All models failed to generate response. Please try again later.")

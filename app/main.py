@@ -11,7 +11,7 @@ import os
 from slowapi.middleware import SlowAPIMiddleware
 from sarvamai import SarvamAI
 
-from utils.model import init_models
+from utils.model import init_sarvam_chat
 from utils.summarizer import init_model
 from DB.deps import db_dependency
 from auth.routes import router as auth_router
@@ -40,9 +40,9 @@ load_dotenv()
 SAVARAM_API = os.getenv("SAVARAM_API")
 FRONTEND_URL = os.getenv("FRONTEND_URL")
 
-# Configurations
-genai.configure(api_key=GENAI_API_KEY)
-model = genai.GenerativeModel(model_name="gemini-2.5-flash")
+# # Configurations
+# genai.configure(api_key=GENAI_API_KEY)
+# model = genai.GenerativeModel(model_name="gemini-2.5-flash")
 
 #OpenAi client
 # client = OpenAI(
@@ -60,8 +60,8 @@ client = SarvamAI(
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await FastAPILimiter.init(redis_client)
-    init_models(model, client, redis_client)
-    init_model(model)
+    init_sarvam_chat(client, redis_client)
+    # init_model(model)
     init_sarvam(client)
     yield
 app = FastAPI(lifespan=lifespan)
