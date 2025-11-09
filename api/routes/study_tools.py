@@ -7,7 +7,7 @@ from uuid import UUID
 from pydantic import BaseModel
 import os
 from dotenv import load_dotenv
-from sqlalchemy import func, case
+from sqlalchemy import func
 from sqlalchemy.dialects.postgresql import insert
 from docx import Document
 from markdown_it import MarkdownIt
