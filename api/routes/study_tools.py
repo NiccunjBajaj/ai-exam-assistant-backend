@@ -1,5 +1,5 @@
 from typing import List
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, Body
+from fastapi import APIRouter, Depends, HTTPException, Query, Body, Response
 from datetime import datetime, timezone
 from sqlalchemy.orm import Session
 import uuid
@@ -7,9 +7,12 @@ from uuid import UUID
 from pydantic import BaseModel
 import os
 from dotenv import load_dotenv
-from openai import OpenAI
 from sqlalchemy import func, case
 from sqlalchemy.dialects.postgresql import insert
+from docx import Document
+from markdown_it import MarkdownIt
+from io import BytesIO
+from sarvamai import SarvamAI
 
 from DB.db_models import Notes, FlashCards, StudySessions, QuizQuestion, Message, QuizAttempt, Session as ChatSession, User
 from DB.deps import db_dependency, get_db
@@ -21,17 +24,15 @@ from auth.limits import enforce_flashcards_limit, enforce_notes_limit
 from utils.model1 import flashcard, note, quiz
 from utils.usage_tracker import track_notes_usage, track_flashcards_usage
 
+
 load_dotenv()
 
-OPENAI_API_KEY2 = os.getenv("OPENAI_API_KEY2")
-OPENAI_BASE_URL = os.getenv("OPENAI_BASE_URL")
+SAVARAM_API=os.getenv("SAVARAM_API")
 
-NOTE_COST = 10
-FLASHCARD_COST = 15
+UTILITY_COST = 10
 
-client = OpenAI(
-    base_url=OPENAI_BASE_URL,
-    api_key=OPENAI_API_KEY2,
+client = SarvamAI(
+    api_subscription_key=SAVARAM_API,
 )
 
 class NoteUpdate(BaseModel):
@@ -71,12 +72,15 @@ class EvaluateReq(BaseModel):
     user_answer: str
     marks: int
 
+class DocxRequest(BaseModel):
+    content: str
+    title: str
+
     
 
 
 
 router = APIRouter()
-
 
 @router.post("/generate-notes")
 async def generate_notes(
@@ -89,7 +93,7 @@ async def generate_notes(
 
     # Track notes usage
     refill_daily_credits(db, user)
-    success, remaining = deduct_credits(db, user, NOTE_COST)
+    success, remaining = deduct_credits(db, user, UTILITY_COST)
 
     if not success:
         raise OutOfCreditsError()
@@ -139,7 +143,7 @@ async def generate_flashcards(
 
      # Track flashcards usage
     refill_daily_credits(db, user)
-    success, remaining = deduct_credits(db, user, FLASHCARD_COST)
+    success, remaining = deduct_credits(db, user, UTILITY_COST)
 
     if not success:
         raise OutOfCreditsError()
@@ -195,6 +199,16 @@ async def generate_quiz(
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
+
+    user = db.query(User).filter(User.id == current_user.id).first()
+
+     # Track flashcards usage
+    refill_daily_credits(db, user)
+    success, remaining = deduct_credits(db, user, UTILITY_COST)
+
+    if not success:
+        raise OutOfCreditsError()
+     
     response = await quiz(req.user_input, req.marks, req.mode)
     
     session = StudySessions(
@@ -254,7 +268,7 @@ async def generate_quiz(
         except Exception as e:
             print(f"⚠️ Skipping malformed block: {e}")
     db.commit()
-    return {"session_id": str(session.id), "total": len(questions)}
+    return {"session_id": str(session.id), "total": len(questions),"credits":remaining}
 
 @router.post("/generate-quiz-from-chat")
 async def generate_quiz_from_chat(
@@ -262,6 +276,16 @@ async def generate_quiz_from_chat(
     req: GenReq1,
     current_user: dict = Depends(get_current_user)
 ):
+
+    user = db.query(User).filter(User.id == current_user.id).first()
+
+     # Track flashcards usage
+    refill_daily_credits(db, user)
+    success, remaining = deduct_credits(db, user, UTILITY_COST)
+
+    if not success:
+        raise OutOfCreditsError()
+
     messages = (
         db.query(Message)
         .join(ChatSession, Message.session_id == ChatSession.id)
@@ -343,7 +367,7 @@ async def generate_quiz_from_chat(
             print(f"⚠️ Skipping malformed block: {e}")
 
     db.commit()
-    return {"session_id": str(study_session.id)}
+    return {"session_id": str(study_session.id),"credits":remaining}
 
 @router.post("/generate-quiz-from-study")
 async def generate_quiz_from_study(
@@ -351,6 +375,15 @@ async def generate_quiz_from_study(
     req: GenReq2,
     current_user: dict = Depends(get_current_user) 
 ):
+
+    user = db.query(User).filter(User.id == current_user.id).first()
+
+     # Track flashcards usage
+    refill_daily_credits(db, user)
+    success, remaining = deduct_credits(db, user, UTILITY_COST)
+
+    if not success:
+        raise OutOfCreditsError()
     
     # Fetch notes and flashcards for this user (only if ids provided)
     notes = (
@@ -525,7 +558,17 @@ async def get_flashcards_by_session(session_id: str, db: db_dependency, current_
         .filter(FlashCards.user_id == current_user.id)
         .all()
     )
-    return [{"id": str(c.id), "question": c.question, "answer": c.answer} for c in cards]
+    return [
+        {
+            "id": str(c.id), 
+            "question": c.question, 
+            "answer": c.answer,
+            "studysession": {   # 👈 match frontend expectation
+                "title": c.session.title if c.session else None
+            }
+            } 
+        for c in cards
+        ]
 
 @router.get("/notes/by-session/{session_id}")
 async def get_notes_by_session(session_id: str, db: db_dependency, current_user: dict = Depends(get_current_user)):
@@ -535,7 +578,17 @@ async def get_notes_by_session(session_id: str, db: db_dependency, current_user:
         .filter(Notes.user_id == current_user.id)
         .all()
     )
-    return [{"id": str(n.id), "session_id":str(n.session_id), "content": n.content} for n in notes]
+    return [
+        {
+            "id": str(n.id),
+            "session_id": str(n.session_id),
+            "content": n.content,
+            "studysession": {   # 👈 match frontend expectation
+                "title": n.session.title if n.session else None
+            }
+        }
+        for n in notes
+    ]
 
 @router.put("/notes/{note_id}")
 def update_note(note_id: str, note_update: NoteUpdate, db: db_dependency,current_user=Depends(get_current_user)):
@@ -572,6 +625,9 @@ async def get_quiz(session_id: str, db: db_dependency, current_user: dict = Depe
             "options": q.options,  # ✅ make sure this is sent
             "correct_option": q.correct_option,
             "correct_answer": q.correct_answer,
+            "studysession": {   # 👈 match frontend expectation
+                "title": q.session.title if q.session else None
+            }
         }
         for q in quizzes
     ]
@@ -582,45 +638,129 @@ async def get_quiz(session_id: str, db: db_dependency, current_user: dict = Depe
 #Evaluator
 @router.post("/evaluate-answer")
 async def evaluate_quiz(
-    db: db_dependency,
     req: EvaluateReq,
-    current_user: dict = Depends(get_current_user)
 ):
-    system_prompt = """
-You are an academic evaluator.
-Your job is to evaluate a student's answer for a {marks}-mark question.
-Marking rules:
-- For 2 marks: Expect 1–2 line factual answers.
-- For 5 marks: Expect 1–2 paragraph concept-based answers.
-- For 10 marks: Expect detailed explanations with exampless.
-Do NOT be too Strict(Boost the confidence of the Student). Strictly match against the ideal answer provided.
-Return response in format:
-Verdict: Correct / Incorrect / Partially Correct
-Explanation: [Only when it is Incorrect/Partially Correct tell Why is it wrong or what was missing]
-Correct Answer: {correct_answer}
+    system_prompt = f"""
+You are **Proff-Eval**, a fair, supportive, and encouraging **Academic Evaluator**.
+Your goal is to help students improve by giving kind, constructive feedback based on their answer.
+
+====================================================
+## 🎯 Your Evaluation Task
+Evaluate the student’s answer using:
+- the official correct answer, and  
+- the mark value for the question.
+
+Your evaluation must be **fair, forgiving, and focused on conceptual understanding**, not wording.
+
+====================================================
+## 🧠 Mark-Based Expectations (Flexible)
+Use the mark value to decide how much detail the student *should* ideally provide:
+
+- **2 Marks:**  
+  - 1–2 lines expected  
+  - Focus on core definition / fact  
+  - Do NOT punish missing examples or details  
+
+- **5 Marks:**  
+  - Short paragraph expected  
+  - Main idea + few supporting points  
+  - Minor missing details = still “Partially Correct”  
+
+- **10 Marks:**  
+  - Detailed explanation with reasoning  
+  - Examples or depth expected  
+  - Missing 1–2 points shouldn’t make it “Incorrect”  
+  - As long as the core concept is correct → give “Partially Correct”  
+
+####################################################
+## ✔️ Evaluation Criteria (Soft and Fair)
+
+### 1. Correctness
+- Is the main concept right?  
+- Even if phrased differently or less perfectly → **Accept it**.
+
+### 2. Completeness
+- Did they cover enough points for the mark value?  
+- Missing minor points → “Partially Correct”, NOT "Incorrect".  
+
+### 3. Clarity
+- Is it understandable?  
+- Ignore grammar mistakes, typos, informal tone.
+
+####################################################
+## ❤️ TONALITY (VERY IMPORTANT)
+
+Be:
+- encouraging  
+- respectful  
+- positive  
+- motivating  
+
+Never discourage the student.  
+Even if the answer is incorrect, gently explain what was missing and appreciate the effort.
+
+####################################################
+## 🔒 Output Format (STRICT)
+Respond ONLY in the following structure:
+
+Verdict: [Correct / Partially Correct / Incorrect]
+
+Explanation: [1–3 sentences. Encourage the student.  
+If correct → praise briefly.  
+If partially correct → explain what was right + what can be improved.  
+If incorrect → explain the correct idea gently.]
+
+Correct Answer: {req.correct_answer}
+
+Do NOT add extra text, headings, emojis, or markdown outside this format.
 """
 
-    user_ans=f"Question: {req.question}\nUser's Answer: {[req.user_answer if req.user_answer != " " else "Not answered"]}\nCorrect Answer: {req.correct_answer}"
+    user_ans = (
+        f"Question: {req.question}\n"
+        f"User's Answer: {req.user_answer.strip() if req.user_answer.strip() else 'Not answered'}\n"
+        f"Correct Answer: {req.correct_answer}"
+    )
 
     try:
-        response = client.chat.completions.create(
-            model="openai/gpt-4.1",
+        response = client.chat.completions(
             messages=[
                 {"role": "system", "content": system_prompt},
-                {
-                    "role": "user",
-                    "content": user_ans,
-                },
+                {"role": "user", "content": user_ans},
             ],
             temperature=0.3,
             max_tokens=300,
         )
-        reply = response.choices[0].message.content
-        verdict = "Correct" if "Verdict: Correct" in reply else "Incorrect"
-        explanation = reply.split("Explanation:")[1].strip()
-        correct_ans = reply.split("Correct Answer:")[1].strip()
 
-        return {"verdict": verdict, "explanation": explanation, "correct_ans": correct_ans}
+        reply = response.choices[0].message.content
+
+        # -------------- SAFE VERDICT PARSING --------------
+        import re
+
+        verdict_match = re.search(r"Verdict:\s*(.*)", reply)
+        verdict_raw = verdict_match.group(1).strip() if verdict_match else "Incorrect"
+
+        # Normalize verdict
+        if "correct" in verdict_raw.lower() and "part" in verdict_raw.lower():
+            verdict = "Partially Correct"
+        elif "correct" in verdict_raw.lower():
+            verdict = "Correct"
+        else:
+            verdict = "Incorrect"
+
+        # -------------- SAFE EXPLANATION PARSING --------------
+        explanation_match = re.search(r"Explanation:\s*(.*?)(?=Correct Answer:)", reply, re.S)
+        explanation = explanation_match.group(1).strip() if explanation_match else "No explanation provided."
+
+        # -------------- SAFE CORRECT ANSWER PARSING --------------
+        correct_match = re.search(r"Correct Answer:\s*(.*)", reply, re.S)
+        correct_ans = correct_match.group(1).strip() if correct_match else req.correct_answer
+
+        return {
+            "verdict": verdict,
+            "explanation": explanation,
+            "correct_ans": correct_ans,
+        }
+
     except Exception as e:
         print("OpenAI Eval Error:", str(e))
         return {"verdict": "Unknown", "explanation": "Evaluation failed. Try again."}
@@ -905,3 +1045,137 @@ def rename_session(session_id: UUID, db: Session = Depends(get_db), user=Depends
     session.title = data.get("title", session.title)
     db.commit()
     return {"message": "Renamed successfully"}
+
+
+# generating docx
+# @router.post("/generate-docx")
+# async def generate_docx(note: dict):
+#     content = note.get("content", "")
+#     title = note.get("title", "Notes")
+
+#     # 1️⃣ Convert Markdown → HTML
+#     html_content = markdown(content)
+
+#     # 2️⃣ Wrap with title + footer
+#     full_html = f"""
+#         <h1>{title}</h1>
+#         {html_content}
+#         <hr/>
+#         <p><em>Generated by Learnee • {datetime.now().strftime("%d-%m-%Y")}</em></p>
+#     """
+
+#     # 3️⃣ Convert HTML → DOCX
+#     file_stream = BytesIO()
+#     html2docx(full_html, file_stream)
+#     file_stream.seek(0)
+
+#     return Response(
+#         content=file_stream.read(),
+#         media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+#         headers={
+#             "Content-Disposition": f"attachment; filename={title.replace(' ', '_')}.docx"
+#         },
+#     )
+
+
+def add_inline_formatting(paragraph, token):
+    if not hasattr(token, "children") or token.children is None:
+        paragraph.add_run(token.content if hasattr(token, "content") else "")
+        return
+
+    for child in token.children:
+        if child.type == "text":
+            paragraph.add_run(child.content)
+
+        elif child.type == "strong_open":
+            run = paragraph.add_run()
+            run.bold = True
+
+        elif child.type == "strong_close":
+            pass
+
+        elif child.type == "em_open":
+            run = paragraph.add_run()
+            run.italic = True
+
+        elif child.type == "em_close":
+            pass
+
+        elif child.type == "code_inline":
+            run = paragraph.add_run(child.content)
+            run.font.name = "Consolas"
+
+        elif child.type == "softbreak":
+            paragraph.add_run("\n")
+
+        elif child.type == "hardbreak":
+            paragraph.add_run("\n")
+
+
+@router.post("/generate-docx")
+async def generate_docx(note: dict):
+    content = note["content"]
+    title = note["title"]
+
+    md = MarkdownIt()
+    tokens = md.parse(content)
+
+    document = Document()
+    document.add_heading(title, level=1)
+
+    i = 0
+    while i < len(tokens):
+        t = tokens[i]
+
+        # Headings
+        if t.type == "heading_open":
+            level = int(t.tag[-1])
+            text = tokens[i + 1].content
+            document.add_heading(text, level=level)
+            i += 3
+            continue
+
+        # Paragraph
+        if t.type == "paragraph_open":
+            p = document.add_paragraph()
+            inline = tokens[i + 1]
+            add_inline_formatting(p, inline)
+            i += 3
+            continue
+
+        # Bullet List
+        if t.type == "list_item_open" and tokens[i - 1].type == "bullet_list_open":
+            p = document.add_paragraph(style="List Bullet")
+            inline = tokens[i + 1]
+            add_inline_formatting(p, inline)
+            i += 3
+            continue
+
+        # Numbered List
+        if t.type == "list_item_open" and tokens[i - 1].type == "ordered_list_open":
+            p = document.add_paragraph(style="List Number")
+            inline = tokens[i + 1]
+            add_inline_formatting(p, inline)
+            i += 3
+            continue
+
+        i += 1
+
+    # Footer
+    footer = document.add_paragraph(
+        f"Generated by Learnee • {datetime.now().strftime('%d-%m-%Y')}"
+    )
+    footer.italic = True
+
+    # Save DOCX
+    stream = BytesIO()
+    document.save(stream)
+    stream.seek(0)
+
+    return Response(
+        content=stream.read(),
+        media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        headers={
+            "Content-Disposition": f"attachment; filename={title.replace(' ', '_')}.docx"
+        },
+    )

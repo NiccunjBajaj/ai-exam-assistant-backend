@@ -146,15 +146,13 @@ async def generate_response(user_id:str,session_id: str,user_input: str,marks: i
 
     # Try GPT first since Gemini has quota issues
     try:
-        print(f"🔍 Generating response with GPT-4.1")
+        print(f"🔍 Generating response with SarvamAI")
         response_raw = await asyncio.wait_for(
             asyncio.to_thread(
-                lambda: client.chat.completions.create(
-                model=GPT_MODEL,
-                messages=[{"role": "system", "content": prompt}],
-                max_tokens=4096,
-                temperature=1,
-                )
+                lambda: client.chat.completions(
+                    messages=[
+                    {"role": "user", "content": prompt}]
+                    )
             ),timeout=TIMEOUT
         )
         response = response_raw.choices[0].message.content

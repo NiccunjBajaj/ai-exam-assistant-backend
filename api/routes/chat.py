@@ -3,6 +3,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Body
 from datetime import datetime, timezone
 from uuid import UUID, uuid4
 from sqlalchemy.orm import Session
+import secrets
 
 from DB.deps import get_db, db_dependency
 from DB.db_models import Session, Message, User
@@ -29,7 +30,7 @@ class CreateSessionRequest(BaseModel):
     title: str
 
 @router.get("/sessions")
-def get_user_sessions(db: db_dependency, user_data: dict = Depends(get_current_user)):
+def get_user_sessions(db: db_dependency, user_data: User = Depends(get_current_user)):
     sessions = db.query(Session).filter(Session.user_id == user_data.id).order_by(Session.created_at.desc()).all()
 
     return [
@@ -45,7 +46,7 @@ def get_user_sessions(db: db_dependency, user_data: dict = Depends(get_current_u
 def get_session_messages(
     session_id: UUID,
     db: db_dependency,
-    user_data: dict = Depends(get_current_user),
+    user_data: User = Depends(get_current_user),
 ):
 
     # Actual secure query
@@ -75,7 +76,7 @@ def get_session_messages(
 def create_session(
     db: db_dependency,
     session_data: dict = Body(...),
-    user_data: dict = Depends(get_current_user),
+    user_data: User = Depends(get_current_user),
 ):
     title = session_data.get("title")
 
@@ -91,7 +92,7 @@ def create_session(
     return {"session_id": str(new_session.id)}
 
 @router.get("/session-exists/{session_id}")
-def session_exists(session_id: UUID, db: Session = Depends(get_db), user=Depends(get_current_user)):
+def session_exists(session_id: UUID, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     session = db.query(Session).filter_by(id=session_id, user_id=user.id).first()
     return {"exists": bool(session)}
 
@@ -110,7 +111,7 @@ async def chat_endpoint(
 
         # ✅ Create new session if one doesn't exist
         if not session_id:
-            title = data.user_input[:50] or "New Chat"
+            title = data.user_input[:22] or "New Chat"
             new_session = Session(
                 id=uuid4(),
                 user_id=current_user.id,
@@ -198,6 +199,7 @@ def rename_session(session_id: UUID, db: Session = Depends(get_db), user=Depends
     db.commit()
     return {"message": "Renamed successfully"}
 
+
 @router.delete("/delete-session/{session_id}")
 def delete_session(session_id: UUID, db: Session = Depends(get_db), user=Depends(get_current_user)):
     session = db.query(Session).filter_by(id=session_id, user_id=user.id).first()
@@ -206,3 +208,39 @@ def delete_session(session_id: UUID, db: Session = Depends(get_db), user=Depends
     db.delete(session)
     db.commit()
     return {"message": "Deleted successfully"}
+
+@router.post("/share-chat/{session_id}")
+def share_chat(session_id: UUID, db: Session = Depends(get_db), user=Depends(get_current_user)):
+    session = db.query(Session).filter_by(id=session_id, user_id=user.id).first()
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    
+    if not session.share_id:
+        session.share_id = secrets.token_urlsafe(16)
+        session.is_shared = True
+        db.commit()
+
+    return {"share_id": session.share_id}
+
+@router.get("/shared-chat/{share_id}")
+def get_shared_chat(share_id: str, db: Session = Depends(get_db)):
+    session = db.query(Session).filter_by(share_id=share_id, is_shared=True).first()
+    if not session:
+        raise HTTPException(status_code=404, detail="Shared chat not found")
+
+    messages = db.query(Message).filter_by(session_id=session.id).order_by(Message.timestamp).all()
+
+    return {
+        "title": session.title,
+        "messages": [
+            {
+                "id": str(msg.id),
+                "content": msg.content,
+                "role": msg.sender,
+                "timestamp": msg.timestamp.isoformat(),
+            }
+            for msg in messages
+        ]
+    }
+
+    

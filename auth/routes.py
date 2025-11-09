@@ -118,7 +118,7 @@ async def login(user: UserLogin, db: db_dependency, response: Response):
         raise HTTPException(status_code=403, detail="Please verify your email before logging in.")
 
     token_data = {'sub': str(db_user.id)}
-    access_token = create_access_token(token_data, expires_delta=timedelta(minutes=60))
+    access_token = create_access_token(token_data, expires_delta=timedelta(days=7))
     refresh_token = create_refresh_token(token_data, expires_delta=timedelta(days=30))
 
     # Set cookie for refresh
@@ -160,7 +160,7 @@ async def google_login(data:GoogleLoginRequest,db:db_dependency,response: Respon
             db.commit()
 
     token_data = {'sub': str(user.id)}
-    access_token = create_access_token(token_data, expires_delta=timedelta(minutes=60))
+    access_token = create_access_token(token_data, expires_delta=timedelta(days=7))
     refresh_token = create_refresh_token(token_data, expires_delta=timedelta(days=30))
 
     set_refresh_cookie(response, refresh_token)
@@ -236,7 +236,7 @@ async def google_callback(request: Request, db: db_dependency):
                 db.commit()
 
         token_data = {'sub': str(user.id)}
-        access_token = create_access_token(token_data, expires_delta=timedelta(minutes=60))
+        access_token = create_access_token(token_data, expires_delta=timedelta(days=7))
         refresh_token = create_refresh_token(token_data, expires_delta=timedelta(days=30))
 
         # Pass both tokens to FE via URL (cookie is also set as fallback)
@@ -275,7 +275,7 @@ async def refresh_token(request: Request, response: Response):
         raise HTTPException(status_code=401, detail=f"Invalid or expired refresh token: {err}")
 
     user_id = payload.get("sub")
-    new_access = create_access_token({"sub": user_id}, expires_delta=timedelta(minutes=60))
+    new_access = create_access_token({"sub": user_id}, expires_delta=timedelta(days=7))
     # Optionally rotate refresh token (recommended):
     new_refresh = create_refresh_token({"sub": user_id}, expires_delta=timedelta(days=30))
     set_refresh_cookie(response, new_refresh)

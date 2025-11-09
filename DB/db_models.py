@@ -95,6 +95,8 @@ class Session(Base):
     user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"))
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     title = Column(String, default="Untitled Chat")
+    share_id = Column(Text, unique=True, nullable=True)
+    is_shared = Column(Boolean, default=False)
 
     user = relationship("User", back_populates="sessions")
     messages = relationship("Message", back_populates="session", cascade="all, delete-orphan")
@@ -136,6 +138,27 @@ class Notes(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     session = relationship("StudySessions", back_populates="notes")
+    
+    voice_explanation = relationship(
+        "VoiceExplanation",
+        back_populates="note",
+        uselist=False,        # One voice explanation per note
+        cascade="all, delete"
+    )
+
+class VoiceExplanation(Base):
+    __tablename__ = "voice_explanations"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    note_id = Column(UUID(as_uuid=True), ForeignKey("notes.id", ondelete="CASCADE"))
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"))
+    formatted_text = Column(Text, nullable=False)  # lively, expressive narration
+    cleaned_text = Column(Text, nullable=False)    # cleaned for TTS input
+    audio_path = Column(Text, nullable=False)      # file path to saved .wav
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    note = relationship("Notes", back_populates="voice_explanation")
+    user = relationship("User")
 
 
 class FlashCards(Base):
