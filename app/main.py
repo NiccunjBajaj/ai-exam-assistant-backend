@@ -12,7 +12,6 @@ from slowapi.middleware import SlowAPIMiddleware
 from sarvamai import SarvamAI
 
 from utils.model import init_sarvam_chat
-from utils.summarizer import init_model
 from DB.deps import db_dependency
 from auth.routes import router as auth_router
 from auth.deps import get_current_user
