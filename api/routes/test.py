@@ -1,13 +1,27 @@
-# api/test_limit.py
-from fastapi import APIRouter, Depends
-from auth.deps import user_dependency
-from auth.limits import enforce_message_limit
+import requests
 
-router = APIRouter(prefix="/test", tags=["Test"])
+# Chat Completions (POST /v1/chat/completions)
+response = requests.post(
+  "https://api.sarvam.ai/v1/chat/completions",
+  headers={
+    "api-subscription-key": "sk_kpp6wrwv_LmDZSqQSZJOKyzRiVrh3Ahhb"
+  },
+  json={
+    "messages": [
+      {
+        "content": "you are a desgin prompter",
+        "role": "system"
+      },
+      {
+        "content": "what is the best color pallete for edu",
+        "role": "user"
+      }
+    ],
+    "model": "sarvam-m"
+  },
+)
 
-@router.get("/limit-check")
-def limit_check(
-    user: user_dependency,
-    _ = Depends(enforce_message_limit)
-):
-    return {"status": "allowed"}
+data = response.json()
+
+assistant_reply = data["choices"][0]["message"]["content"]
+print("Assistant:", assistant_reply)

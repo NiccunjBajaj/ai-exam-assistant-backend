@@ -1,18 +1,16 @@
 from typing import List
 from fastapi import APIRouter, Depends, HTTPException, Query, Body, Response
 from datetime import datetime, timezone
+import requests
 from sqlalchemy.orm import Session
 import uuid
 from uuid import UUID
 from pydantic import BaseModel
-import os
-from dotenv import load_dotenv
 from sqlalchemy import func
 from sqlalchemy.dialects.postgresql import insert
 from docx import Document
 from markdown_it import MarkdownIt
 from io import BytesIO
-from sarvamai import SarvamAI
 
 from DB.db_models import Notes, FlashCards, StudySessions, QuizQuestion, Message, QuizAttempt, Session as ChatSession, User
 from DB.deps import db_dependency, get_db
@@ -24,16 +22,12 @@ from auth.limits import enforce_flashcards_limit, enforce_notes_limit
 from utils.model1 import flashcard, note, quiz
 from utils.usage_tracker import track_notes_usage, track_flashcards_usage
 
-
-load_dotenv()
-
-SAVARAM_API=os.getenv("SAVARAM_API")
-
 UTILITY_COST = 10
 
-client = SarvamAI(
-    api_subscription_key=SAVARAM_API,
-)
+def init_sarvam_eval(svaram):
+    global sarvam_client
+    sarvam_client = svaram
+
 
 class NoteUpdate(BaseModel):
     content: str
@@ -93,14 +87,15 @@ async def generate_notes(
 
     # Track notes usage
     refill_daily_credits(db, user)
-    success, remaining = deduct_credits(db, user, UTILITY_COST)
-
-    if not success:
-        raise OutOfCreditsError()
 
     notes_text = await note(req.user_input,req.marks)
     if not notes_text:
         raise HTTPException(502, "LLM failed to generate notes")
+    
+    success, remaining = deduct_credits(db, user, UTILITY_COST)
+
+    if not success:
+        raise OutOfCreditsError()
     
     session = StudySessions(
     user_id=current_user.id,
@@ -143,14 +138,15 @@ async def generate_flashcards(
 
      # Track flashcards usage
     refill_daily_credits(db, user)
-    success, remaining = deduct_credits(db, user, UTILITY_COST)
-
-    if not success:
-        raise OutOfCreditsError()
 
     response = await flashcard(req.user_input,req.marks)
     if not response:
         raise HTTPException(status_code=502, detail="LLM failed to generate flashcards")
+    
+    success, remaining = deduct_credits(db, user, UTILITY_COST)
+
+    if not success:
+        raise OutOfCreditsError()
 
      # robust parser
     flashcards = []
@@ -204,12 +200,16 @@ async def generate_quiz(
 
      # Track flashcards usage
     refill_daily_credits(db, user)
+
+    response = await quiz(req.user_input, req.marks, req.mode)
+    
+    if not response:
+        raise HTTPException(status_code=502, detail="LLM failed to generate quiz")
+        
     success, remaining = deduct_credits(db, user, UTILITY_COST)
 
     if not success:
         raise OutOfCreditsError()
-     
-    response = await quiz(req.user_input, req.marks, req.mode)
     
     session = StudySessions(
         user_id=current_user.id,
@@ -281,10 +281,6 @@ async def generate_quiz_from_chat(
 
      # Track flashcards usage
     refill_daily_credits(db, user)
-    success, remaining = deduct_credits(db, user, UTILITY_COST)
-
-    if not success:
-        raise OutOfCreditsError()
 
     messages = (
         db.query(Message)
@@ -316,9 +312,13 @@ async def generate_quiz_from_chat(
     db.commit()
 
     response = await quiz(context, req.marks, req.mode)
-
     if not response:
-        raise HTTPException(status_code=500, detail="LLM returned no quiz")
+        raise HTTPException(status_code=502, detail="LLM failed to generate quiz")
+
+    success, remaining = deduct_credits(db, user, UTILITY_COST)
+
+    if not success:
+        raise OutOfCreditsError()
     
     blocks = response.split("Q:")[1:]
 
@@ -380,10 +380,6 @@ async def generate_quiz_from_study(
 
      # Track flashcards usage
     refill_daily_credits(db, user)
-    success, remaining = deduct_credits(db, user, UTILITY_COST)
-
-    if not success:
-        raise OutOfCreditsError()
     
     # Fetch notes and flashcards for this user (only if ids provided)
     notes = (
@@ -442,6 +438,11 @@ async def generate_quiz_from_study(
     if not response:
         raise HTTPException(status_code=500, detail="No quiz generated")
     
+    success, remaining = deduct_credits(db, user, UTILITY_COST)
+
+    if not success:
+        raise OutOfCreditsError()
+
     blocks = response.split("Q:")[1:]
 
     for block in blocks:
@@ -652,6 +653,7 @@ Evaluate the student’s answer using:
 
 Your evaluation must be **fair, forgiving, and focused on conceptual understanding**, not wording.
 
+The quiz which you will be evaluating is of {req.marks}{"Marks" if req.marks <=10 else "Words"}
 ====================================================
 ## 🧠 Mark-Based Expectations (Flexible)
 Use the mark value to decide how much detail the student *should* ideally provide:
@@ -710,50 +712,60 @@ If correct → praise briefly.
 If partially correct → explain what was right + what can be improved.  
 If incorrect → explain the correct idea gently.]
 
-Correct Answer: {req.correct_answer}
+Correct Answer: [give the correct answer]
 
 Do NOT add extra text, headings, emojis, or markdown outside this format.
 """
+    user_int = " "
+    if req.user_answer.strip() == "":
+        user_int = "User did not answer"
+    else:
+        user_int = req.user_answer.strip()
+
+    print(user_int)
 
     user_ans = (
         f"Question: {req.question}\n"
-        f"User's Answer: {req.user_answer.strip() if req.user_answer.strip() else 'Not answered'}\n"
+        f"User's Answer: {user_int}\n"
         f"Correct Answer: {req.correct_answer}"
     )
 
     try:
-        response = client.chat.completions(
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_ans},
-            ],
-            temperature=0.3,
-            max_tokens=300,
+        response_raw  = sarvam_client.chat.completions(
+            messages = [
+                {
+                    "content":system_prompt,
+                    "role":"system"
+                },
+                {
+                    "content":user_ans,
+                    "role":"user"
+                }
+            ]
         )
+                
+        reply = response_raw.choices[0].message.content
 
-        reply = response.choices[0].message.content
-
-        # -------------- SAFE VERDICT PARSING --------------
-        import re
-
-        verdict_match = re.search(r"Verdict:\s*(.*)", reply)
-        verdict_raw = verdict_match.group(1).strip() if verdict_match else "Incorrect"
-
-        # Normalize verdict
-        if "correct" in verdict_raw.lower() and "part" in verdict_raw.lower():
-            verdict = "Partially Correct"
-        elif "correct" in verdict_raw.lower():
+        verdict = ""
+        # ---------- VERDICT ----------
+        if "Verdict: Correct" in reply:
             verdict = "Correct"
+        elif "Verdict: Partially Correct" in reply:
+            verdict = "Partially Correct"
+        elif "Verdict: Incorrect" in reply:
+            verdict = "Incorrect"
         else:
             verdict = "Incorrect"
 
-        # -------------- SAFE EXPLANATION PARSING --------------
-        explanation_match = re.search(r"Explanation:\s*(.*?)(?=Correct Answer:)", reply, re.S)
-        explanation = explanation_match.group(1).strip() if explanation_match else "No explanation provided."
+        # ---------- EXPLANATION ----------
+        explanation = ""
+        if "Explanation:" in reply:
+            explanation = reply.split("Explanation:")[1].split("Correct Answer:")[0].strip()
 
-        # -------------- SAFE CORRECT ANSWER PARSING --------------
-        correct_match = re.search(r"Correct Answer:\s*(.*)", reply, re.S)
-        correct_ans = correct_match.group(1).strip() if correct_match else req.correct_answer
+        # ---------- CORRECT ANSWER ----------
+        correct_ans = ""
+        if "Correct Answer:" in reply:
+            correct_ans = reply.split("Correct Answer:")[1].strip()
 
         return {
             "verdict": verdict,
@@ -762,7 +774,7 @@ Do NOT add extra text, headings, emojis, or markdown outside this format.
         }
 
     except Exception as e:
-        print("OpenAI Eval Error:", str(e))
+        print("SarvamAI Eval Error:", str(e))
         return {"verdict": "Unknown", "explanation": "Evaluation failed. Try again."}
 
 
@@ -1032,6 +1044,9 @@ def delete_session(session_id: UUID, db: db_dependency, current_user: dict = Dep
     session = db.query(StudySessions).filter_by(id=session_id, user_id=current_user.id).first()
     if not session:
         raise HTTPException(status_code=404, detail="Study session not found")
+
+    # Also delete associated quiz questions
+    db.query(QuizQuestion).filter_by(session_id=session_id, user_id=current_user.id).delete()
 
     db.delete(session)
     db.commit()

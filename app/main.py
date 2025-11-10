@@ -18,9 +18,9 @@ from auth.deps import get_current_user
 from api.routes.chat import router as chat_router
 from utils.rate_limiter import limiter
 from api.routes.file_upload import router as up_router
-from api.routes.study_tools import router as study_router
+from api.routes.study_tools import init_sarvam_eval, router as study_router
 from utils.redis_handler import redis_client
-from utils.model1 import init_sarvam
+from utils.model1 import init_sarvam_openai
 from api.routes.plan import router as plan_router
 from api.routes.payment import router as payment_router
 # from api.routes.test import router as test_router
@@ -34,8 +34,8 @@ load_dotenv()
 
 #API Keys
 # GENAI_API_KEY = os.getenv("GENAI_API_KEY")
-# OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-# OPENAI_BASE_URL = os.getenv("OPENAI_BASE_URL")
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+OPENAI_BASE_URL = os.getenv("OPENAI_BASE_URL")
 SAVARAM_API = os.getenv("SAVARAM_API")
 FRONTEND_URL = os.getenv("FRONTEND_URL")
 
@@ -43,14 +43,14 @@ FRONTEND_URL = os.getenv("FRONTEND_URL")
 # genai.configure(api_key=GENAI_API_KEY)
 # model = genai.GenerativeModel(model_name="gemini-2.5-flash")
 
-#OpenAi client
-# client = OpenAI(
-#     base_url=OPENAI_BASE_URL,
-#     api_key=OPENAI_API_KEY,
-# )
+# OpenAi client
+client = OpenAI(
+    base_url=OPENAI_BASE_URL,
+    api_key=OPENAI_API_KEY,
+)
 
 
-client = SarvamAI(
+sarvam = SarvamAI(
     api_subscription_key=SAVARAM_API,
 )
 
@@ -59,9 +59,9 @@ client = SarvamAI(
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await FastAPILimiter.init(redis_client)
-    init_sarvam_chat(client, redis_client)
-    # init_model(model)
-    init_sarvam(client)
+    init_sarvam_chat(sarvam, redis_client)
+    init_sarvam_eval(sarvam)
+    init_sarvam_openai(client,sarvam)
     yield
 app = FastAPI(lifespan=lifespan)
 

@@ -5,6 +5,10 @@ from datetime import datetime,timezone
 from uuid import UUID
 import uuid
 import re
+import requests
+from dotenv import load_dotenv
+import os
+
 
 from .prompt_format import get_or_prompt
 from DB.deps import db_dependency
@@ -14,15 +18,15 @@ from memory.chat_history import save_user_and_bot_messages
 from DB.db_models import Session,FlashCards,StudySessions,Notes
 from api.routes.study_tools import flashcard,note
 
+load_dotenv()
 
 MAX_RETRIES = 3
 TIMEOUT = 20
 
 #From main.py
-GPT_MODEL = "openai/gpt-4.1"
 model = None
 client = None
-redis_client: Redis = None
+redis_client: Redis = None 
 
 def init_sarvam_chat(sarvam,redis_instance):
     global client, redis_client
@@ -112,7 +116,7 @@ async def generate_response(user_id:str,session_id: str,user_input: str,marks: i
     str: The generated response or an error message.
     """
 
-    if not model or not client:
+    if not client:
         raise Exception("AI models not initialized. Please check server configuration.")
 
     if not redis_client:
@@ -145,18 +149,22 @@ async def generate_response(user_id:str,session_id: str,user_input: str,marks: i
 
     # Try GPT first since Gemini has quota issues
     try:
-        print(f"🔍 Generating response with SarvamAI")
         response_raw = await asyncio.wait_for(
             asyncio.to_thread(
                 lambda: client.chat.completions(
-                    messages=[
-                    {"role": "user", "content": prompt}]
-                    )
-            ),timeout=TIMEOUT
-        )
+                        messages=[
+
+                            {
+                            "content": prompt,
+                            "role": "user", 
+                            }
+                        ],
+                        )
+                ),timeout=TIMEOUT
+            )
         response = response_raw.choices[0].message.content
+
         if response:
-            print(response)
             try:
                 ensure_session_exists(session_id, user_id, db)
                 await _save_to_stm(user_id,session_id,role="user",content=user_input)
@@ -189,7 +197,7 @@ async def generate_response(user_id:str,session_id: str,user_input: str,marks: i
     except Exception as e:
         print(f"GPT error: {str(e)}")
 
-    # Fallback to Gemini if GPT fails
+    # # Fallback to Gemini if GPT fails
     # try:
     #     response_raw = await asyncio.wait_for(asyncio.to_thread(model.generate_content,prompt),timeout=TIMEOUT)
     #     response = response_raw.text

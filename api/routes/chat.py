@@ -144,12 +144,6 @@ async def chat_endpoint(
         # 2️⃣ Calculate cost dynamically
         chat_cost = calculate_chat_cost(data.user_input)
 
-        # 3️⃣ Deduct credits
-        success, remaining = deduct_credits(db, user, chat_cost)
-
-        if not success:
-            raise OutOfCreditsError()
-
         # ✅ Generate response
         response = await generate_response(
             user_id=user_id,
@@ -158,6 +152,12 @@ async def chat_endpoint(
             marks=data.marks,
             db=db
         )
+
+        if not response:
+            success, remaining = deduct_credits(db, user, chat_cost)
+
+            if not success:
+                raise OutOfCreditsError()
 
         # ✅ Store bot message
         bot_message = Message(
@@ -189,6 +189,7 @@ async def chat_endpoint(
         print(traceback.format_exc())
         db.rollback()
         raise GenericServerError(str(e))
+
 
 @router.put("/rename-session/{session_id}")
 def rename_session(session_id: UUID, db: Session = Depends(get_db), user=Depends(get_current_user), data: dict = Body(...)):
