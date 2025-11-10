@@ -153,7 +153,7 @@ async def chat_endpoint(
             db=db
         )
 
-        if not response:
+        if response:
             success, remaining = deduct_credits(db, user, chat_cost)
 
             if not success:
