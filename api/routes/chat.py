@@ -24,7 +24,6 @@ router = APIRouter()
 class ChatRequest(BaseModel):
     session_id: Optional[UUID]
     user_input: str
-    marks: int
 
 class CreateSessionRequest(BaseModel):
     title: str
@@ -149,7 +148,6 @@ async def chat_endpoint(
             user_id=user_id,
             session_id=session_id,
             user_input=data.user_input,
-            marks=data.marks,
             db=db
         )
 

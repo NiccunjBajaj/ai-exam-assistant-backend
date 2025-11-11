@@ -15,7 +15,7 @@ from DB.deps import db_dependency
 from memory.short_term import _get_stm, _save_to_stm
 # from memory.long_term import retrive_similar_memories,check_and_update_ltm
 from memory.chat_history import save_user_and_bot_messages
-from DB.db_models import Session,FlashCards,StudySessions,Notes
+from DB.db_models import Session,FlashCards,StudySessions,Notes, Message
 from api.routes.study_tools import flashcard,note
 
 load_dotenv()
@@ -55,7 +55,7 @@ def detect_study_intent(user_input: str):
 
     return None
 
-async def trigger_study_generation(user_input, intent, user_id, db, marks):
+async def trigger_study_generation(user_input, intent, user_id, db):
     title = user_input[:40] + "..." if len(user_input) > 40 else user_input
 
     session = StudySessions(
@@ -69,7 +69,7 @@ async def trigger_study_generation(user_input, intent, user_id, db, marks):
     db.refresh(session)
 
     if intent == "notes":
-        notes_text = await note(user_input, marks)
+        notes_text = await note(user_input)
         note_entry = Notes(
             id=uuid.uuid4(),
             user_id=user_id,
@@ -81,7 +81,7 @@ async def trigger_study_generation(user_input, intent, user_id, db, marks):
         db.add(note_entry)
 
     elif intent == "flashcard":
-        response = await flashcard(user_input, marks)
+        response = await flashcard(user_input, 5)
         flashcards = []
         for block in response.split("Q:")[1:]:
             if "A:" not in block:
@@ -104,13 +104,12 @@ async def trigger_study_generation(user_input, intent, user_id, db, marks):
 
 
 #Main GENERATION FUNCTION
-async def generate_response(user_id:str,session_id: str,user_input: str,marks: int,db:db_dependency):
+async def generate_response(user_id:str,session_id: str,user_input: str,db:db_dependency):
     """
     Generate a response based on user input and the specified mark distribution.
 
     Args:
     user_input (str): The user's question or prompt.
-    marks (int): The mark distribution (e.g., 2, 5, 10) to guide response formatting.
 
     Returns:
     str: The generated response or an error message.
@@ -122,7 +121,7 @@ async def generate_response(user_id:str,session_id: str,user_input: str,marks: i
     if not redis_client:
         raise Exception("Redis client not initialized. Please check server configuration.")
 
-    cache_key = f"chat:{user_input}:{marks}"
+    cache_key = f"chat:{user_input}"
     # Check if the response is cached
     try:
         cached_response = await redis_client.get(cache_key)
@@ -137,6 +136,25 @@ async def generate_response(user_id:str,session_id: str,user_input: str,marks: i
         print(f"Error getting short-term memory: {str(e)}")
         stm_history = []
 
+    if not stm_history:
+        print(f"STM cache miss for session {session_id}. Hydrating from DB.")
+        db_messages = (
+            db.query(Message)
+            .filter(Message.session_id == session_id)
+            .order_by(Message.timestamp)
+            .all()
+        )
+
+        if db_messages:
+            # Hydrate stm_history for the current request
+            stm_history = [
+                {"role": msg.sender, "content": msg.content} for msg in db_messages
+            ]
+            # Asynchronously save all messages to Redis for subsequent requests
+            for msg in stm_history:
+                await _save_to_stm(user_id, session_id, role=msg["role"], content=msg["content"])
+
+
     # try:
     #     ltm_chunks = retrive_similar_memories(user_id=user_id, query=user_input, db=db)
     #     ltm_context = "\n".join([chunk.content for chunk in ltm_chunks]) if ltm_chunks else ""
@@ -144,7 +162,7 @@ async def generate_response(user_id:str,session_id: str,user_input: str,marks: i
     #     print(f"Error getting long-term memory: {str(e)}")
         ltm_context = ""
 
-    prompt = await get_or_prompt(user_input,marks,stm_history,session_id)
+    prompt = await get_or_prompt(user_input,stm_history,session_id)
     intent = detect_study_intent(user_input)
 
     # Try GPT first since Gemini has quota issues
@@ -152,17 +170,21 @@ async def generate_response(user_id:str,session_id: str,user_input: str,marks: i
         response_raw = await asyncio.wait_for(
             asyncio.to_thread(
                 lambda: client.chat.completions(
-                        messages=[
+                    messages=[
+                        {"content": prompt, "role": "user"},
+                    ],
+                    max_tokens=2000,      # <-- Required to stop truncation
+                    temperature=0.4
+                )
+            ),timeout=TIMEOUT
+        )
+        finish_reason = response_raw.choices[0].finish_reason
+        content = response_raw.choices[0].message.content.strip()
 
-                            {
-                            "content": prompt,
-                            "role": "user", 
-                            }
-                        ],
-                        )
-                ),timeout=TIMEOUT
-            )
-        response = response_raw.choices[0].message.content
+        if finish_reason == "length":
+            response = content + "\n\n⚠️ *The answer was very long, so I stopped early.*\nType **continue** to receive the next part."
+        else:
+            response = content
 
         if response:
             try:
@@ -181,7 +203,6 @@ async def generate_response(user_id:str,session_id: str,user_input: str,marks: i
                         intent=intent,
                         user_id=user_id,
                         db=db,
-                        marks=marks,
                     ))
                     if intent == "notes":
                         response += "\n\n📝 I've also generated notes for you. You can check them in the Study tab."

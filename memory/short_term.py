@@ -2,8 +2,9 @@ import json
 import redis.asyncio as redis
 from typing import List
 from utils.redis_handler import redis_client as r
+import os
 
-MAX_MSG = 10
+MAX_MSG = int(os.environ.get('STM_MAX_MESSAGES',25))
 
 def _stm_key(user_id:str,session_id:str):
     return f'stm:{user_id}:{session_id}'

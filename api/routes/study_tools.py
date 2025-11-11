@@ -36,7 +36,6 @@ class GenReq(BaseModel):
     user_input: str
     source: str
     file_name: str
-    marks: int = 5
     title: str
 
 class GenReqQuiz(BaseModel):
@@ -87,8 +86,8 @@ async def generate_notes(
 
     # Track notes usage
     refill_daily_credits(db, user)
-
-    notes_text = await note(req.user_input,req.marks)
+    
+    notes_text = await note(req.user_input)
     if not notes_text:
         raise HTTPException(502, "LLM failed to generate notes")
     
